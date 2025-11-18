@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whisper Network - Configuration Avancée</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="icon">🔒</span>
+        <h1>Whisper Network Pro</h1>
+      </div>
+      <div class="status" id="status">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span id="statusText">Vérification...</span>
+      </div>
+    </div>
+
+    <!-- Activation principale -->
+    <div class="main-toggle">
+      <label class="toggle">
+        <input type="checkbox" id="enabledToggle">
+        <span class="slider"></span>
+        <span class="label">Extension activée</span>
+      </label>
+    </div>
+
+    <!-- Configuration API -->
+    <div class="section">
+      <h3>Configuration API</h3>
+      <div class="input-group">
+        <label for="apiUrl">URL de l'API Whisper:</label>
+        <input type="url" id="apiUrl" placeholder="http://localhost:8001">
+        <button id="testApiBtn" class="btn-secondary">Tester</button>
+      </div>
+    </div>
+
+    <!-- Onglets pour les catégories -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="personal">🔑 Personnelles</button>
+      <button class="tab-btn" data-tab="professional">💼 Professionnelles</button>
+      <button class="tab-btn" data-tab="sensitive">🏥 Sensibles</button>
+      <button class="tab-btn" data-tab="contextual">🌍 Contextuelles</button>
+    </div>
+
+    <!-- Données personnelles -->
+    <div id="personal" class="tab-content active">
+      <div class="section">
+        <h3>🔑 Données personnelles des individus</h3>
+        <div class="checkbox-grid">
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_names">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Noms et prénoms</span>
+              <span class="description">Jean Dupont → ***NAME***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_addresses">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Adresses postales</span>
+              <span class="description">123 rue de la Paix → ***ADDRESS***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_phone">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Numéros de téléphone</span>
+              <span class="description">01.23.45.67.89 → ***PHONE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_email">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Emails</span>
+              <span class="description">user@domain.com → ***EMAIL***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_birth_dates">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Dates de naissance / Âge</span>
+              <span class="description">15/03/1985, 38 ans → ***DATE_NAISSANCE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_nir">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">NIR / Sécurité sociale</span>
+              <span class="description">1 23 45 67 890 123 → ***NIR***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_id_cards">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Cartes d'identité</span>
+              <span class="description">N° CNI → ***CNI***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_passports">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Passeports</span>
+              <span class="description">N° passeport → ***PASSEPORT***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_ip">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Adresses IP</span>
+              <span class="description">192.168.1.1 → ***IP***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_logins">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Identifiants numériques</span>
+              <span class="description">Login, cookies → ***LOGIN***</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Données professionnelles -->
+    <div id="professional" class="tab-content">
+      <div class="section">
+        <h3>💼 Données professionnelles</h3>
+        <div class="checkbox-grid">
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_employee_ids">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Matricules employés</span>
+              <span class="description">EMP12345 → ***MATRICULE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_performance_data">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Évaluations de performance</span>
+              <span class="description">Notes RH → ***EVALUATION***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_salary_data">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Données de paie</span>
+              <span class="description">3500€ brut → ***SALAIRE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_schedules">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Planning individuels</span>
+              <span class="description">Horaires personnels → ***PLANNING***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_internal_comm">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Communications internes</span>
+              <span class="description">Emails, messages → ***COMM_INTERNE***</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Données sensibles -->
+    <div id="sensitive" class="tab-content">
+      <div class="section">
+        <h3>🏥 Données sensibles spécifiques</h3>
+        <div class="checkbox-grid">
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_medical_data">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Données de santé</span>
+              <span class="description">Diagnostics, traitements → ***MEDICAL***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_bank_accounts">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Comptes bancaires</span>
+              <span class="description">RIB, relevés → ***COMPTE_BANCAIRE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_credit_cards">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Cartes de crédit</span>
+              <span class="description">4532 1234 5678 9012 → ***CARTE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_iban">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">IBAN</span>
+              <span class="description">FR76 1234 5678 → ***IBAN***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_transactions">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Transactions</span>
+              <span class="description">Virements, dettes → ***TRANSACTION***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_grades">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Notes scolaires</span>
+              <span class="description">Bulletins, 15/20 → ***NOTE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_legal_cases">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Dossiers juridiques</span>
+              <span class="description">Litiges, sanctions → ***DOSSIER_JURIDIQUE***</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Données contextuelles -->
+    <div id="contextual" class="tab-content">
+      <div class="section">
+        <h3>🌍 Données contextuelles</h3>
+        <div class="checkbox-grid">
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_locations">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Localisation précise</span>
+              <span class="description">Lieux identifiants → ***LIEU***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_geolocations">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Géolocalisation</span>
+              <span class="description">48.8566° N → ***COORDONNEES***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_access_badges">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Badges d'accès</span>
+              <span class="description">Identifiants d'accès → ***BADGE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_photo_references">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Références photos</span>
+              <span class="description">Photos identifiables → ***PHOTO***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_biometric">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Données biométriques</span>
+              <span class="description">Empreintes, reconnaissance → ***BIOMETRIE***</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_urls">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">URLs</span>
+              <span class="description">https://site.com → ***URL***</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Boutons de test -->
+    <div class="section">
+      <h3>Tests</h3>
+      <div class="button-group">
+        <button id="testAnonymizationBtn" class="btn-primary">
+          <span class="icon">🔍</span>
+          Tester l'anonymisation
+        </button>
+        <button id="presetBtn" class="btn-secondary">
+          <span class="icon">⚡</span>
+          Profil RGPD Complet
+        </button>
+      </div>
+    </div>
+
+    <!-- Actions rapides -->
+    <div class="section">
+      <h3>Actions rapides</h3>
+      <div class="button-group">
+        <button id="enableAllBtn" class="btn-secondary">Tout activer</button>
+        <button id="disableAllBtn" class="btn-secondary">Tout désactiver</button>
+        <button id="resetBtn" class="btn-secondary">Réinitialiser</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="api-info">
+        <span id="apiStatus">API: Déconnectée</span>
+        <span id="processingTime"></span>
+      </div>
+      <div class="version">Version 2.0 - RGPD Compliant</div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

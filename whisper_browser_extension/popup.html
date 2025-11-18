@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whisper Network - Configuration</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="icon">🔒</span>
+        <h1>Whisper Network</h1>
+      </div>
+      <div class="status" id="status">
+        <span class="status-indicator" id="statusIndicator"></span>
+        <span id="statusText">Vérification...</span>
+      </div>
+    </div>
+
+    <!-- Activation principale -->
+    <div class="main-toggle">
+      <label class="toggle">
+        <input type="checkbox" id="enabledToggle">
+        <span class="slider"></span>
+        <span class="label">Extension activée</span>
+      </label>
+    </div>
+
+    <!-- Configuration API -->
+    <div class="section">
+      <h3>Configuration API</h3>
+      <div class="input-group">
+        <label for="apiUrl">URL de l'API Whisper:</label>
+        <input type="url" id="apiUrl" placeholder="http://localhost:8001">
+        <button id="testApiBtn" class="btn-secondary">Tester</button>
+      </div>
+    </div>
+
+    <!-- Mode de traitement -->
+    <div class="section">
+      <h3>Mode de traitement</h3>
+      <div class="radio-group">
+        <label class="radio-item">
+          <input type="radio" name="processingMode" value="fast" id="modefast" checked>
+          <span class="radio-mark"></span>
+          <div>
+            <span class="title">Rapide ⚡</span>
+            <span class="description">Optimisé pour modèles locaux (regex seul)</span>
+          </div>
+        </label>
+        <label class="radio-item">
+          <input type="radio" name="processingMode" value="complete" id="modeComplete">
+          <span class="radio-mark"></span>
+          <div>
+            <span class="title">Complet 🎯</span>
+            <span class="description">Analyse avancée avec IA (plus lent)</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Paramètres d'anonymisation -->
+    <div class="section">
+      <h3>Types d'anonymisation</h3>
+      <div class="checkbox-grid">
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_ip" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Adresses IP</span>
+            <span class="description">192.168.1.1 → IP_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_email" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Emails</span>
+            <span class="description">user@domain.com → EMAIL_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_phone" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Téléphones</span>
+            <span class="description">01.23.45.67.89 → TEL_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_nir" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">NIR (Sécu)</span>
+            <span class="description">1 23 45 67 890 123 → NIR_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_names" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Noms propres</span>
+            <span class="description">Jean Dupont → NOM_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_address" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Adresses</span>
+            <span class="description">123 rue... → ADRESSE_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_urls" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">URLs</span>
+            <span class="description">https://example.com → URL_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_credit_cards" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Cartes bancaires</span>
+            <span class="description">1234 5678... → CB_1</span>
+          </div>
+        </label>
+
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_iban" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">IBAN</span>
+            <span class="description">FR76 1234... → IBAN_1</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Options comportementales -->
+    <div class="section">
+      <h3>Comportement</h3>
+      <label class="checkbox-item">
+        <input type="checkbox" id="showPreview">
+        <span class="checkmark"></span>
+        <div>
+          <span class="title">Afficher l'aperçu</span>
+          <span class="description">Montrer l'original vs anonymisé</span>
+        </div>
+      </label>
+
+      <label class="checkbox-item">
+        <input type="checkbox" id="autoAnonymize">
+        <span class="checkmark"></span>
+        <div>
+          <span class="title">Auto-anonymisation</span>
+          <span class="description">Anonymiser automatiquement avant envoi (Ctrl+I)</span>
+        </div>
+      </label>
+    </div>
+
+    <!-- Statistiques de performance -->
+    <div class="section">
+      <h3>Performance</h3>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-value" id="lastProcessingTime">-</span>
+          <span class="stat-label">Dernière requête (ms)</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="averageTime">-</span>
+          <span class="stat-label">Temps moyen</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="totalProcessed">0</span>
+          <span class="stat-label">Textes traités</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test en direct -->
+    <div class="section">
+      <h3>Test en direct</h3>
+      <div class="test-area">
+        <textarea id="testInput" placeholder="Écrivez ici du texte contenant des données sensibles pour tester l'anonymisation...&#10;&#10;Exemple: Mon email est jean.dupont@entreprise.com, mon IP est 192.168.1.100 et mon téléphone est 01.23.45.67.89"></textarea>
+        <div class="test-controls">
+          <button id="testAnonymizeBtn" class="btn-primary">Tester l'anonymisation</button>
+          <div class="processing-indicator" id="processingIndicator" style="display: none;">
+            <span class="spinner"></span>
+            <span id="processingStatus">Traitement...</span>
+          </div>
+        </div>
+        <div id="testResult" class="test-result"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button id="saveBtn" class="btn-primary">Sauvegarder</button>
+      <button id="resetBtn" class="btn-secondary">Réinitialiser</button>
+    </div>
+
+    <!-- Footer info -->
+    <div class="footer">
+      <p>Whisper Network v1.0.0</p>
+      <p>🔒 Vos données ne quittent jamais votre machine</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

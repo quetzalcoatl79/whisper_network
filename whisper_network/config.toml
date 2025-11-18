@@ -1,0 +1,39 @@
+# Configuration pour optimisation modèle local
+[performance]
+# Désactiver spaCy pour les modèles légers (utilise seulement regex)
+use_spacy = false
+
+# Mise en cache des patterns pour éviter la recompilation
+cache_patterns = true
+
+# Traitement par batch pour de gros volumes
+batch_size = 100
+
+# Timeout par requête (ms)
+request_timeout = 5000
+
+[local_model]
+# Optimisations pour modèle local
+enable_local_optimizations = true
+
+# Limite de mémoire pour le cache (MB)
+max_cache_size = 50
+
+# Intervalle de nettoyage du cache (secondes)
+cache_cleanup_interval = 300
+
+[anonymization]
+# Patterns par défaut activés (les plus rapides)
+default_patterns = [
+    "anonymize_email",
+    "anonymize_phone", 
+    "anonymize_ip",
+    "anonymize_credit_cards",
+    "anonymize_iban"
+]
+
+# Patterns plus lents (nécessitent spaCy ou analyse complexe)
+advanced_patterns = [
+    "anonymize_names",
+    "anonymize_address"
+]

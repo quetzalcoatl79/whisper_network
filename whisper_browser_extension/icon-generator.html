@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Générateur d'icônes Whisper Network</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .icon-canvas { margin: 10px; border: 1px solid #ccc; }
+        .download-section { margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Générateur d'icônes Whisper Network</h1>
+    <p>Cliquez sur les boutons pour télécharger les icônes PNG :</p>
+    
+    <div class="download-section">
+        <canvas id="icon16" class="icon-canvas" width="16" height="16"></canvas>
+        <button onclick="downloadIcon('icon16', 16)">Télécharger icon16.png</button>
+        
+        <canvas id="icon32" class="icon-canvas" width="32" height="32"></canvas>
+        <button onclick="downloadIcon('icon32', 32)">Télécharger icon32.png</button>
+        
+        <canvas id="icon48" class="icon-canvas" width="48" height="48"></canvas>
+        <button onclick="downloadIcon('icon48', 48)">Télécharger icon48.png</button>
+        
+        <canvas id="icon128" class="icon-canvas" width="128" height="128"></canvas>
+        <button onclick="downloadIcon('icon128', 128)">Télécharger icon128.png</button>
+    </div>
+
+    <script>
+        // Couleurs
+        const bgColor = '#667eea';
+        const textColor = '#ffffff';
+
+        // Créer les icônes
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Fond rond
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, size * 0.2);
+            ctx.fill();
+            
+            // Texte "🔒" ou "W"
+            ctx.fillStyle = textColor;
+            ctx.font = `bold ${size * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Utiliser "W" car l'emoji peut ne pas bien s'afficher
+            ctx.fillText('W', size/2, size/2);
+            
+            // Bordure subtile
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(0.5, 0.5, size-1, size-1, size * 0.2);
+            ctx.stroke();
+        }
+
+        // Fonction de téléchargement
+        function downloadIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Support pour roundRect (pour les navigateurs plus anciens)
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+
+        // Créer toutes les icônes au chargement
+        window.onload = function() {
+            createIcon('icon16', 16);
+            createIcon('icon32', 32);
+            createIcon('icon48', 48);
+            createIcon('icon128', 128);
+        };
+    </script>
+</body>
+</html>

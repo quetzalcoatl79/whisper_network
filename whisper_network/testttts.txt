@@ -1,0 +1,294 @@
+Voici **les critères d’acceptation pour *chaque* story**, structurés proprement, exhaustifs et adaptés au périmètre ContainerLab FE.
+Je fournis **uniquement les critères**, comme demandé — tout est prêt à injecter dans Jira ou Linear.
+
+---
+
+# ✅ **THÈME 1 — Topology Builder & Visualisation**
+
+---
+
+## **EPIC : Construction et visualisation des topologies**
+
+---
+
+### **STORY 1 — Visualisation d’une topologie en graphe**
+
+**En tant que** utilisateur
+**Je veux** visualiser une topologie réseau sous forme de graphe interactif
+**Afin** de comprendre l’architecture, les relations entre nœuds et l’état du lab.
+
+#### 🎯 Critères d’acceptation
+
+- Le système affiche un graphe dès qu’une topologie valide est chargée.
+- Les nœuds s’affichent avec un nom, une icône et un type (kind).
+- Les liens sont visibles et connectent les bons nœuds.
+- L’utilisateur peut déplacer (drag) les nœuds sans casser les liens.
+- L’utilisateur peut cliquer un nœud pour afficher ses propriétés.
+- Le graphe se met à jour automatiquement si la topologie change.
+- Le layout respecte un algorithme lisible (force, circle, grid).
+- L’affichage fonctionne sur Chrome, Firefox, Edge.
+
+---
+
+### **STORY 2 — Construire une topologie depuis le front**
+
+**En tant que** utilisateur
+**Je veux** créer et modifier une topologie directement dans l’interface
+**Afin** de préparer un lab complet sans écrire de YAML manuellement.
+
+#### 🎯 Critères d’acceptation
+
+- L’utilisateur peut ajouter un nœud avec un formulaire dédié.
+- L’utilisateur peut supprimer un nœud et tous ses liens associés.
+- Le front empêche la création de doublons de noms de nœuds.
+- L’utilisateur peut créer un lien visuellement (A → B).
+- La topologie interne (JSON) reflète fidèlement le graphe affiché.
+- Le système valide les champs obligatoires (kind, name).
+- Tout changement apparaît instantanément dans l’UI.
+
+---
+
+### **STORY 3 — Importer une topologie existante**
+
+**En tant que** utilisateur
+**Je veux** charger un fichier YAML/containerlab
+**Afin** de visualiser et modifier une topologie existante.
+
+#### 🎯 Critères d’acceptation
+
+- L’utilisateur peut sélectionner un fichier YAML à importer.
+- Le fichier est validé (syntaxe, sections attendues).
+- En cas de mauvaise structure, un message d’erreur clair est affiché.
+- La topologie importée est automatiquement affichée dans le graphe.
+- Les propriétés des nœuds importés sont accessibles et éditables.
+- Le graphe est cohérent avec le YAML chargé.
+- 
+---
+
+# ✅ **THÈME 2 — Orchestration & Cycle de vie**
+
+---
+
+## **EPIC : Déploiement & Gestion du lab**
+
+---
+
+### **STORY 4 — Déployer un lab**
+
+**En tant que** utilisateur
+**Je veux** déployer la topologie que j’ai construite
+**Afin** de lancer automatiquement l’ensemble des conteneurs réseau.
+
+#### 🎯 Critères d’acceptation
+
+- Un bouton “Déployer” est visible et actif uniquement si la topologie est valide.
+- Un appel API `/deploy` est déclenché au clic.
+- Un indicateur de progression apparaît.
+- En cas d’erreur API, un message clair est affiché.
+- À la fin du déploiement, le graphe met à jour les états (up/down).
+- L’utilisateur sait si le déploiement est réussi ou échoué.
+
+---
+
+### **STORY 5 — Stopper ou détruire un lab**
+
+**En tant que** utilisateur
+**Je veux** arrêter ou détruire un lab
+**Afin** de libérer les ressources et nettoyer mon environnement.
+
+#### 🎯 Critères d’acceptation
+
+- Un bouton “Stop” et un bouton “Destroy” sont disponibles avec confirmation.
+- API `/stop` puis `/destroy` sont appelés selon l’action.
+- L’état du lab est mis à jour instantanément sur le graphe (offline).
+- L’utilisateur reçoit un feedback visuel (toast).
+- En cas d’erreur, le message fournit la cause (lab introuvable, etc.).
+
+---
+
+### **STORY 6 — Rafraîchir l’état d’un lab**
+
+**En tant que** utilisateur
+**Je veux** rafraîchir l’état des nœuds du lab
+**Afin** d’avoir une vision correcte du statut des conteneurs.
+
+#### 🎯 Critères d’acceptation
+
+- Un bouton “Refresh status” est disponible.
+- API `/state` est appelée.
+- Les nœuds changent de couleur ou d’icône selon leur état réel.
+- Les nœuds nouvellement créés apparaissent s’ils sont détectés.
+- Les erreurs API sont gérées sans bloquer l’UI.
+
+---
+
+# ✅ **THÈME 3 — Administration des nœuds et liens**
+
+---
+
+## **EPIC : Gestion des composants réseau**
+
+---
+
+### **STORY 7 — Modifier les propriétés d’un nœud**
+
+**En tant que** utilisateur
+**Je veux** modifier les propriétés d’un nœud (kind, image, mgmt, labels)
+**Afin** d’adapter précisément sa configuration réseau.
+
+#### 🎯 Critères d’acceptation
+
+- Un panneau latéral s’ouvre quand un nœud est sélectionné.
+- Les propriétés sont modifiables (kind, image, mgmt…).
+- Le système empêche la sauvegarde d’un nom déjà existant.
+- La modification se reflète immédiatement dans le graphe.
+- Les erreurs (image invalide, champ vide) sont affichées.
+
+---
+
+### **STORY 8 — CRUD des liens**
+
+**En tant que** utilisateur
+**Je veux** créer, éditer et supprimer les liens entre les nœuds
+**Afin** de contrôler précisément les relations réseau.
+
+#### 🎯 Critères d’acceptation
+
+- L’utilisateur peut créer un lien en sélectionnant 2 nœuds ou via drag.
+- L’utilisateur peut modifier les interfaces utilisées.
+- Un lien peut être supprimé individuellement.
+- Les incohérences (interface déjà utilisée) sont bloquées.
+- Le graphe se met à jour dynamiquement.
+
+---
+
+### **STORY 9 — Associer une configuration à un nœud**
+
+**En tant que** utilisateur
+**Je veux** uploader un fichier de configuration pour un nœud
+**Afin** qu’il soit appliqué automatiquement au déploiement.
+
+#### 🎯 Critères d’acceptation
+
+- Un bouton “Importer configuration” est disponible pour chaque nœud.
+- Le fichier est chargé, validé et lié au nœud.
+- Le contenu apparaît dans la JSON/YAML finale.
+- Si le fichier est invalide, un message d’erreur apparaît.
+
+---
+
+# ✅ **THÈME 4 — Monitoring & Observabilité**
+
+---
+
+## **EPIC : Suivi et diagnostic temps réel**
+
+---
+
+### **STORY 10 — Voir l’état des nœuds en temps réel**
+
+**En tant que** utilisateur
+**Je veux** voir l’état (up/down) des nœuds en direct
+**Afin** de diagnostiquer en un coup d'œil le lab.
+
+#### 🎯 Critères d’acceptation
+
+- L'état est mis à jour au minimum toutes les X secondes (polling configurable).
+- Le graphe affiche un indicateur visuel (couleur / icône).
+- Une erreur API n’empêche pas la continuité du monitoring.
+- Un panneau récapitulatif affiche l’état global du lab.
+
+---
+
+### **STORY 11 — Consulter les logs d’un nœud**
+
+**En tant que** utilisateur
+**Je veux** afficher les logs d’un nœud réseau
+**Afin** d’analyser un comportement ou une erreur.
+
+#### 🎯 Critères d’acceptation
+
+- Un onglet “Logs” existe dans les propriétés du nœud.
+- L’appel API `/logs/{node}` renvoie le contenu.
+- Le contenu est scrollable, formaté et lisible.
+- L’utilisateur peut filtrer les logs par texte.
+- Les erreurs sont affichées (logs indisponibles).
+
+---
+
+### **STORY 12 — Exécuter des commandes dans un nœud**
+
+**En tant que** utilisateur
+**Je veux** lancer des commandes directement dans un conteneur
+**Afin** de diagnostiquer ou tester une configuration.
+
+#### 🎯 Critères d’acceptation
+
+- L’interface affiche un terminal web (xterm.js).
+- L'appel API `/exec` exécute les commandes.
+- La sortie stdout et stderr apparaît en direct.
+- Les erreurs (commande invalide, conteneur down) sont gérées.
+
+---
+
+# ✅ **THÈME 5 — Export & Projets**
+
+---
+
+## **EPIC : Gestion des projets**
+
+---
+
+### **STORY 13 — Exporter une topologie**
+
+**En tant que** utilisateur
+**Je veux** exporter la topologie sous format YAML
+**Afin** de la réutiliser ou la versionner.
+
+#### 🎯 Critères d’acceptation
+
+- Le YAML généré doit être conforme au standard ContainerLab.
+- Le fichier se télécharge automatiquement.
+- Les nœuds, liens et configs doivent apparaître correctement.
+- En cas d’erreur (missing mandatory fields), l’export est bloqué.
+
+---
+
+### **STORY 14 — Importer une topologie YAML**
+
+**En tant que** utilisateur
+**Je veux** importer un fichier YAML
+**Afin** de charger une topologie déjà existante.
+
+#### 🎯 Critères d’acceptation
+
+- Le fichier est validé (syntaxe, schéma).
+- Les erreurs sont affichées précisément (ligne, champ).
+- Le graphe est mis à jour après import.
+- Le fichier téléchargé est stockable localement.
+
+---
+
+### **STORY 15 — Navigation UX améliorée**
+
+**En tant que** utilisateur
+**Je veux** naviguer facilement dans l’interface
+**Afin** de travailler efficacement sur mon lab.
+
+#### 🎯 Critères d’acceptation
+
+- L’interface contient un menu latéral avec les sections (Builder, Labs, Logs…).
+- L’historique (browser history) fonctionne.
+- L’état de l'UI est sauvegardé (localStorage).
+- Le thème et les préférences sont persistés.
+
+---
+
+# Si tu veux, je peux maintenant :
+
+✅ ajouter **la charge, priorité et taille t-shirt** story par story
+✅ générer les **tâches avec durée + critères d’acceptation individuels**
+✅ créer un **CSV importable Jira / Linear**
+✅ produire une **roadmap (Gantt)**
+
+Souhaites-tu la prochaine étape ?

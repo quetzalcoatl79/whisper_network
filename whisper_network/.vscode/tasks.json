@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Whisper Network API (Docker)",
+			"type": "shell",
+			"command": "docker-compose up -d && echo '✅ API started at http://localhost:8001' && echo '📚 Docs at http://localhost:8001/docs'",
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

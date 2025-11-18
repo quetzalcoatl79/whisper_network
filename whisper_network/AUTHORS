@@ -1,0 +1,21 @@
+# Contributors
+
+## Main Developer
+
+**Sylvain JOLY, NANO by NXO**
+- Role: Creator and Principal Developer
+- Email: sylvain.joly@whisper-network.com
+- LinkedIn: https://linkedin.com/in/sylvain-joly
+- Contributions: Architecture, Core Engine, API Development, Docker Integration
+
+## License
+
+This project is licensed under the MIT License.
+Copyright (c) 2025 Sylvain JOLY, NANO by NXO
+
+## Acknowledgments
+
+Special thanks to the open source community and the contributors of:
+- FastAPI framework
+- spaCy NLP library
+- Docker containerization platform

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnostic Whisper Network</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .diagnostic-item {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .success { border-left: 4px solid #48bb78; background: #f0fff4; }
+        .error { border-left: 4px solid #f56565; background: #fff5f5; }
+        .warning { border-left: 4px solid #ed8936; background: #fffaf0; }
+        .info { border-left: 4px solid #4299e1; background: #ebf8ff; }
+        button { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        pre { background: #2d3748; color: #e2e8f0; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .test-results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Diagnostic Whisper Network Extension</h1>
+    
+    <button onclick="runAllTests()">🚀 Lancer tous les diagnostics</button>
+    <button onclick="clearResults()">🧹 Effacer les résultats</button>
+    
+    <div id="results" class="test-results"></div>
+
+    <script>
+        async function runAllTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>🔍 Diagnostic en cours...</h2>';
+            
+            const tests = [
+                testExtensionPresence,
+                testApiConnection,
+                testExtensionPermissions,
+                testStorageAccess,
+                testBackgroundScript,
+                testManifest
+            ];
+            
+            for (const test of tests) {
+                try {
+                    await test();
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Pause entre tests
+                } catch (error) {
+                    addResult(`❌ Erreur dans ${test.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            addResult('✅ Diagnostic terminé', 'success');
+        }
+        
+        async function testExtensionPresence() {
+            addResult('🔍 Test 1: Présence de l\'extension...', 'info');
+            
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                addResult('✅ Extension Chrome détectée', 'success');
+                addResult(`📋 Extension ID: ${chrome.runtime.id}`, 'info');
+            } else {
+                addResult('❌ Extension Chrome non détectée', 'error');
+                return;
+            }
+        }
+        
+        async function testApiConnection() {
+            addResult('🔍 Test 2: Connexion API...', 'info');
+            
+            const apiUrl = 'http://localhost:8001';
+            
+            try {
+                const response = await fetch(`${apiUrl}/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addResult('✅ API accessible', 'success');
+                    addResult(`📊 Status: ${data.status}`, 'info');
+                    addResult(`🏷️ Service: ${data.service}`, 'info');
+                } else {
+                    addResult(`❌ API erreur HTTP: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Impossible de joindre l'API: ${error.message}`, 'error');
+                addResult('💡 Vérifiez que Docker tourne: docker-compose ps', 'warning');
+            }
+        }
+        
+        async function testExtensionPermissions() {
+            addResult('🔍 Test 3: Permissions extension...', 'info');
+            
+            if (!chrome.runtime) return;
+            
+            // Test permissions
+            const permissions = ['activeTab', 'storage', 'scripting', 'contextMenus'];
+            
+            try {
+                const hasPermissions = await chrome.permissions.contains({
+                    permissions: permissions
+                });
+                
+                if (hasPermissions) {
+                    addResult('✅ Toutes les permissions accordées', 'success');
+                } else {
+                    addResult('⚠️ Certaines permissions manquent', 'warning');
+                }
+            } catch (error) {
+                addResult(`❌ Erreur vérification permissions: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testStorageAccess() {
+            addResult('🔍 Test 4: Accès au storage...', 'info');
+            
+            if (!chrome.storage) {
+                addResult('❌ chrome.storage non disponible', 'error');
+                return;
+            }
+            
+            try {
+                // Test écriture
+                await chrome.storage.sync.set({ testKey: 'testValue' });
+                
+                // Test lecture
+                const result = await chrome.storage.sync.get(['testKey']);
+                
+                if (result.testKey === 'testValue') {
+                    addResult('✅ Storage fonctionne', 'success');
+                    
+                    // Nettoyer
+                    await chrome.storage.sync.remove(['testKey']);
+                } else {
+                    addResult('❌ Storage défaillant', 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Erreur storage: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testBackgroundScript() {
+            addResult('🔍 Test 5: Communication background script...', 'info');
+            
+            if (!chrome.runtime) return;
+            
+            return new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'testApi' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        addResult(`❌ Erreur communication: ${chrome.runtime.lastError.message}`, 'error');
+                    } else if (response) {
+                        addResult('✅ Background script répond', 'success');
+                        addResult(`📡 Réponse: ${JSON.stringify(response)}`, 'info');
+                    } else {
+                        addResult('❌ Pas de réponse du background script', 'error');
+                    }
+                    resolve();
+                });
+                
+                // Timeout
+                setTimeout(() => {
+                    addResult('⏰ Timeout communication background', 'warning');
+                    resolve();
+                }, 5000);
+            });
+        }
+        
+        async function testManifest() {
+            addResult('🔍 Test 6: Configuration manifest...', 'info');
+            
+            if (!chrome.runtime) return;
+            
+            const manifest = chrome.runtime.getManifest();
+            
+            addResult(`📋 Nom: ${manifest.name}`, 'info');
+            addResult(`🔢 Version: ${manifest.version}`, 'info');
+            addResult(`📦 Manifest version: ${manifest.manifest_version}`, 'info');
+            
+            // Vérifier les permissions essentielles
+            const requiredPermissions = ['activeTab', 'storage', 'scripting'];
+            const hasAllPermissions = requiredPermissions.every(perm => 
+                manifest.permissions && manifest.permissions.includes(perm)
+            );
+            
+            if (hasAllPermissions) {
+                addResult('✅ Permissions manifest OK', 'success');
+            } else {
+                addResult('⚠️ Permissions manifest incomplètes', 'warning');
+            }
+            
+            // Vérifier host_permissions
+            if (manifest.host_permissions && manifest.host_permissions.includes('http://localhost:8001/*')) {
+                addResult('✅ Permission API localhost OK', 'success');
+            } else {
+                addResult('❌ Permission API localhost manquante', 'error');
+            }
+        }
+        
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const item = document.createElement('div');
+            item.className = `diagnostic-item ${type}`;
+            item.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            resultsDiv.appendChild(item);
+            
+            // Scroll vers le bas
+            item.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        // Lancer automatiquement au chargement
+        document.addEventListener('DOMContentLoaded', function() {
+            addResult('🔧 Page de diagnostic chargée', 'info');
+            addResult('💡 Cliquez sur "Lancer tous les diagnostics" pour commencer', 'info');
+        });
+    </script>
+</body>
+</html>

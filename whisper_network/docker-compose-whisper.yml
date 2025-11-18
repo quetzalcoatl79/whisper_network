@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  whisper-network:
+    build: .
+    container_name: whisper-network
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    volumes:
+      # Optionnel: pour persister les modèles téléchargés
+      - whisper_models:/app/models
+
+volumes:
+  whisper_models:

@@ -10,6 +10,14 @@ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1
 langdetect>=1.0.9
 # File handling
 chardet>=5.2.0
+# Office documents
+python-docx>=1.1.0      # Microsoft Word (.docx)
+openpyxl>=3.1.0         # Microsoft Excel (.xlsx)
+odfpy>=1.4.1            # LibreOffice (.odt, .ods)
+# Rich formats
+pypdf>=3.17.0           # PDF extraction
+pdfplumber>=0.10.0      # Advanced PDF parsing (tables, layout)
+striprtf>=0.0.26        # RTF to plain text
 # Sécurité & Configuration
 python-dotenv>=1.0.0
 slowapi>=0.1.9

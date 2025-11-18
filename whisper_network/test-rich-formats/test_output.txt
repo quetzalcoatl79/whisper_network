@@ -1,0 +1,22 @@
+=== ***LOCATION_1*** 1 ===
+***NAME_1***
+Ce document contient des informations sensibles.
+***ORG_1***:
+- M. ***NAME_2*** (***EMAIL_1***)
+- ***NAME_3*** (***EMAIL_2***)
+- Tel: ***PHONE_1***
+***NAME_10***ME_4***: ***IP_PRIVEE_1***
+- ***NAME_5*** BDD: ***IP_PRIVEE_2***
+- DNS: 8.8.8.***IP_PUBLIQUE_1***yés concernés:
+- ***ID_1***: ***NAME_6***
+- ID-67890: ***NAME_7***
+- ID-11111: ***NAME_8***
+=== ***LOCATION_2***
+***LOCATION_3*** - ***NAME_11***
+Adresses IP privées:
+***IP_PRIVEE_3*** - Station 1
+***IP_PRIVEE_4*** - Station 2
+***IP_PRIVEE_5*** - ***NAME_9***:
+***EMAIL_3***
+***EMAIL_4***
+***EMAIL_5***

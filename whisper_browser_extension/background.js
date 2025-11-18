@@ -219,9 +219,20 @@ async function anonymizeText(text, customSettings) {
         }
     } catch (error) {
         console.error('Anonymization failed:', error);
+        
+        // Message d'erreur plus explicite selon le type d'erreur
+        let userMessage = error.message;
+        if (error.message.includes('Failed to fetch')) {
+            userMessage = `Impossible de contacter l'API (${finalSettings.apiUrl}). Vérifiez que le serveur est démarré.`;
+        } else if (error.message.includes('NetworkError')) {
+            userMessage = 'Erreur réseau. Vérifiez votre connexion.';
+        } else if (error.message.includes('CORS')) {
+            userMessage = 'Erreur CORS. Vérifiez la configuration du serveur.';
+        }
+        
         return {
             success: false,
-            error: error.message
+            error: userMessage
         };
     }
 }

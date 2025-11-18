@@ -31,17 +31,17 @@ context :
 - [x] **Parser texte universel** : Support .txt, .md, .log ✅
 - [x] **Scripts Shell** : .sh, .bash, .zsh, .ps1 ✅
 - [x] **Fichiers de configuration** : .conf, .ini, .yaml, .json, .toml, .env ✅
-- [x] **Documents Office** : ✅ (export en .txt)
+- [x] **Documents Office** : ✅ **(extraction + anonymisation fonctionnelle, export en .txt)**
   - [x] Microsoft : .docx, .xlsx → extraction texte + anonymisation ✅
   - [x] LibreOffice/OpenOffice : .odt, .ods → extraction texte + anonymisation ✅
   - [ ] Apple : .pages, .numbers (PDF export possible)
   - [ ] Anciens formats : .doc, .xls (nécessite libreoffice/antiword)
-  - [ ] 🔄 **TODO**: Reconstruction format original après anonymisation
-- [x] **Formats riches** : .pdf, .rtf ✅ (export en .txt)
+  - [ ] 🔄 **Future**: Reconstruction format original avec mise en page préservée
+- [x] **Formats riches** : .pdf, .rtf ✅ **(extraction + anonymisation fonctionnelle, export en .txt)**
   - [x] PDF : Extraction texte et tableaux (pdfplumber + pypdf) ✅
   - [x] RTF : Conversion vers texte simple (striprtf) ✅
   - [ ] OCR pour PDF scannés (tesseract/pytesseract)
-  - [ ] 🔄 **TODO**: Reconstruction format original après anonymisation
+  - [ ] 🔄 **Future**: Reconstruction format original avec mise en page préservée
 - [x] **Code source** : .py, .js, .java, .cpp, .cs, etc. ✅
 - [x] **Détection automatique** du format via magic numbers ✅
 - [x] **Preview avant/après** : Affichage infos fichier dans extension ✅
@@ -49,12 +49,44 @@ context :
 - [x] **API endpoint** : `/anonymize-file` avec upload multipart ✅
 - [x] **Extension UI** : Onglet dédié avec drag & drop ✅
 - [x] **Tests backend** : test_office_files.py avec 4 formats (.docx, .xlsx, .odt, .ods) ✅
-- [?] **Tests E2E** : À valider avec extension (attente Cloudflare)
+- [X] **Tests E2E** : À valider avec extension (attente Cloudflare)
 
 ---
 
 ## 🚀 **Priorité HAUTE**
 
+### 🎓 Fine-tuning & Entraînement du Modèle ⭐ **NOUVEAU**
+- [ ] **Collecte de données d'entraînement** :
+  - [ ] Créer dataset d'exemples annotés (noms, emails, IPs, tél, etc.)
+  - [ ] Format: JSON avec {text, entities: [{start, end, label}]}
+  - [ ] Minimum 100-200 exemples par type d'entité
+  - [ ] Validation manuelle de la qualité des annotations
+- [ ] **Préparation données spaCy** :
+  - [ ] Convertir dataset au format spaCy (.spacy)
+  - [ ] Split train/dev/test (70%/15%/15%)
+  - [ ] Vérifier équilibre des classes d'entités
+- [ ] **Fine-tuning spaCy** :
+  - [ ] Créer config.cfg pour fine-tuning (spacy init config)
+  - [ ] Entraîner modèle personnalisé (spacy train)
+  - [ ] Hyperparamètres: learning rate, dropout, batch size
+  - [ ] Early stopping sur validation set
+- [ ] **Évaluation & Métriques** :
+  - [ ] Précision, Rappel, F1-score par type d'entité
+  - [ ] Matrice de confusion
+  - [ ] Erreurs d'anonymisation (faux négatifs critiques)
+  - [ ] Comparaison avant/après fine-tuning
+- [ ] **Déploiement modèle custom** :
+  - [ ] Packaging modèle spaCy (.tar.gz)
+  - [ ] Intégration dans Docker (COPY ou pip install)
+  - [ ] Sélection modèle via variable d'environnement
+  - [ ] Fallback vers modèle standard si custom indisponible
+- [ ] **Amélioration continue** :
+  - [ ] Pipeline feedback utilisateur (signaler erreurs)
+  - [ ] Ré-entraînement périodique avec nouvelles données
+  - [ ] Versioning des modèles (v1.0, v1.1, etc.)
+  - [ ] A/B testing modèle standard vs custom
+
+ 
 ### ⚡ Performance
 - [ ] **Cache intelligent** : Redis/mémoire pour résultats d'anonymisation
 - [ ] **Batch processing** : Endpoint `/anonymize/batch` pour traiter plusieurs textes
@@ -109,6 +141,19 @@ context :
 - [ ] **Stockage temporaire** : TTL configurable (1h par défaut)
 - [ ] **Export mappings** : JSON chiffré téléchargeable
 - [ ] **Import mappings** : Pour restaurer une session
+
+#### Reconstruction Formats Binaires ⭐ **NOUVEAU**
+- [ ] **Documents Office** : Reconstruire .docx, .xlsx, .odt, .ods avec mise en page préservée
+  - [ ] Approche 1: Templating (python-docx, openpyxl) - Créer nouveau document avec styles
+  - [ ] Approche 2: DOM manipulation - Modifier XML interne sans reconstruction
+  - [ ] Approche 3: LibreOffice headless - Utiliser API UNO pour édition
+- [ ] **PDF** : Reconstruire PDF avec mise en page originale
+  - [ ] Option 1: PDF→HTML→PDF (wkhtmltopdf, WeasyPrint)
+  - [ ] Option 2: Overlay transparent avec reportlab
+  - [ ] Option 3: PDF editing libraries (PyMuPDF, pdfrw)
+- [ ] **RTF** : Reconstruire RTF avec formatage préservé
+  - [ ] Parser RTF, remplacer texte, régénérer RTF
+- [ ] **Choix utilisateur** : Option "Préserver format" vs "Export texte" dans extension
 
 #### Historique & Statistiques
 - [ ] **Historique local chiffré** : SQLite dans l'extension

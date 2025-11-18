@@ -112,6 +112,14 @@ async function anonymizeCurrentField() {
     showNotification('🔄 Anonymisation en cours...', 'info');
 
     try {
+        // Vérifier que le contexte d'extension est valide
+        if (!chrome.runtime?.id) {
+            console.error('❌ Extension context invalidated - rechargement nécessaire');
+            showNotification('❌ Extension rechargée. Rechargez la page (F5).', 'error');
+            field.style.opacity = '1';
+            return;
+        }
+
         // Envoyer au background script
         chrome.runtime.sendMessage({
             action: 'anonymize',
@@ -121,7 +129,12 @@ async function anonymizeCurrentField() {
 
             if (chrome.runtime.lastError) {
                 console.error('❌ Erreur:', chrome.runtime.lastError);
-                showNotification('❌ Erreur de connexion', 'error');
+                const errorMsg = chrome.runtime.lastError.message;
+                if (errorMsg.includes('Extension context invalidated')) {
+                    showNotification('❌ Extension rechargée. Rechargez la page (F5).', 'error');
+                } else {
+                    showNotification('❌ Erreur: ' + errorMsg, 'error');
+                }
                 return;
             }
 

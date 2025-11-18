@@ -34,6 +34,18 @@ print_header() {
     echo -e "${NC}"
 }
 
+check_docker() {
+    if ! docker info > /dev/null 2>&1; then
+        print_error "Docker Desktop n'est pas démarré !"
+        echo -e "${YELLOW}Action requise:${NC}"
+        echo "  1. Démarrez Docker Desktop"
+        echo "  2. Attendez que Docker soit complètement démarré"
+        echo "  3. Relancez ce script: ./deploy.sh"
+        exit 1
+    fi
+    print_success "Docker est actif"
+}
+
 print_step() {
     echo -e "${GREEN}▶ $1${NC}"
 }
@@ -186,11 +198,14 @@ show_info() {
 main() {
     print_header
     
-    # Vérifier que Docker est disponible
+    # Vérifier que Docker est installé
     if ! command -v docker &> /dev/null; then
         print_error "Docker n'est pas installé ou n'est pas dans le PATH"
         exit 1
     fi
+    
+    # Vérifier que Docker Desktop est démarré
+    check_docker
     
     # Vérifier que nous sommes dans le bon répertoire
     if [ ! -f "Dockerfile" ]; then

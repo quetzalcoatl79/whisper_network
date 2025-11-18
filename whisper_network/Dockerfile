@@ -25,8 +25,9 @@ COPY pyproject.toml .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download and install French spaCy model
-RUN python -m spacy download fr_core_news_sm
+# Download and install spaCy models (French + English)
+RUN python -m spacy download fr_core_news_sm && \
+    python -m spacy download en_core_web_sm
 
 # Copy source code
 COPY . .

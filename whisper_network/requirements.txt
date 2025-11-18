@@ -3,4 +3,8 @@ uvicorn[standard]>=0.24.0
 pydantic>=2.4.0
 python-multipart>=0.0.6
 spacy>=3.7.0
+# Modèles spaCy multilingues
 https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.7.0/fr_core_news_sm-3.7.0-py3-none-any.whl
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+# Détection automatique de langue
+langdetect>=1.0.9

@@ -20,6 +20,14 @@ except ImportError:
     SPACY_AVAILABLE = False
     spacy = None
 
+try:
+    from langdetect import detect, LangDetectException
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
+    detect = None
+    LangDetectException = Exception
+
 
 class AnonymizationType(Enum):
     """Types of anonymization available."""
@@ -222,23 +230,27 @@ class RegexPatterns:
         r'(?:[\s.-]?\d{2})?\b'
     )
     
-    # Phone numbers - plus précis pour éviter confusion avec IP
+    # Phone numbers - Support international amélioré
     PHONE = re.compile(
         r'''(?x)
         (?<!\d)  # Ne pas suivre un chiffre
         (?:
-            # Format international
+            # Format international avec parenthèses optionnelles pour indicatif zone
             (?:\+|00)\d{1,3}[\s\-\.]*
-            (?:\(0\)[\s\-\.]*)?
-            \d{1,4}(?:[\s\-\.]\d{2,4}){2,4}
+            (?:\(\d{1,4}\)[\s\-\.]*)?  # Parenthèses pour indicatif zone (ex: (555))
+            (?:\(0\)[\s\-\.]*)?  # Ou (0) pour certains pays
+            \d{1,4}(?:[\s\-\.]\d{2,4}){1,4}  # Reste du numéro
             |
-            # Format français national
-            0[1-9](?:[\s\-\.]\d{2}){4}
+            # Format français national (strict pour éviter confusion avec IP)
+            0[1-9][\s\-]?(?:\d{2}[\s\-]?){4}
             |
-            # Format générique (minimum 8 chiffres avec séparateurs)
-            (?:\d{2,4}[\s\-\.]\d{2,4}[\s\-\.]\d{2,4}(?:[\s\-\.]\d{2,4})*)
+            # Format US sans code pays : XXX-XXX-XXXX ou (XXX) XXX-XXXX
+            (?:\(\d{3}\)|\d{3})[\s\-\.]?\d{3}[\s\-\.]\d{4}
+            |
+            # Format générique international (minimum 7 chiffres avec séparateurs)
+            (?:\d{2,4}[\s\-]\d{2,4}[\s\-]\d{2,4}(?:[\s\-]\d{2,4})*)
         )
-        (?!\.\d)  # Ne pas précéder un point + chiffre (évite les IP)
+        (?![\.\d])  # Ne pas précéder un point + chiffre (évite les IP)
         '''
     )
     
@@ -348,21 +360,74 @@ class RegexPatterns:
 
 
 class AnonymizationEngine:
-    """Advanced anonymization engine."""
+    """Advanced anonymization engine with multi-language support."""
     
     def __init__(self, settings: Optional[AnonymizationSettings] = None):
         """Initialize the anonymization engine."""
         self.settings = settings or AnonymizationSettings()
         self.patterns = RegexPatterns()
         
-        # Initialize spaCy model for name detection
-        self.nlp = None
+        # Initialize spaCy models for name detection (multi-language)
+        self.nlp_fr = None
+        self.nlp_en = None
+        self.nlp = None  # Will be set dynamically based on language detection
+        
         if SPACY_AVAILABLE:
+            # Load French model
             try:
-                self.nlp = spacy.load("fr_core_news_sm")
+                self.nlp_fr = spacy.load("fr_core_news_sm")
+                self.nlp = self.nlp_fr  # Default to French
+                print("✅ Modèle spaCy français chargé")
             except OSError:
-                print("⚠️  Modèle spaCy français non trouvé. Détection de noms désactivée.")
-                self.nlp = None
+                print("⚠️  Modèle spaCy français non trouvé. Détection de noms FR désactivée.")
+            
+            # Load English model
+            try:
+                self.nlp_en = spacy.load("en_core_web_sm")
+                print("✅ Modèle spaCy anglais chargé")
+            except OSError:
+                print("⚠️  Modèle spaCy anglais non trouvé. Détection de noms EN désactivée.")
+            
+            if not self.nlp_fr and not self.nlp_en:
+                print("❌ Aucun modèle spaCy disponible. Détection de noms désactivée.")
+    
+    def _detect_language(self, text: str) -> str:
+        """
+        Detect the language of the text.
+        Returns 'fr' for French, 'en' for English, or 'fr' as default.
+        """
+        if not LANGDETECT_AVAILABLE or not text or len(text.strip()) < 10:
+            return 'fr'  # Default to French
+        
+        try:
+            # langdetect returns ISO 639-1 codes (fr, en, etc.)
+            lang = detect(text)
+            
+            # Map to supported languages
+            if lang in ['en', 'eng']:
+                return 'en'
+            elif lang in ['fr', 'fra']:
+                return 'fr'
+            else:
+                # Default to French for unsupported languages
+                return 'fr'
+        except (LangDetectException, Exception):
+            return 'fr'  # Default to French on error
+    
+    def _select_nlp_model(self, text: str):
+        """Select the appropriate spaCy model based on detected language."""
+        if not SPACY_AVAILABLE:
+            return
+        
+        detected_lang = self._detect_language(text)
+        
+        if detected_lang == 'en' and self.nlp_en:
+            self.nlp = self.nlp_en
+        elif detected_lang == 'fr' and self.nlp_fr:
+            self.nlp = self.nlp_fr
+        else:
+            # Fallback to any available model
+            self.nlp = self.nlp_fr or self.nlp_en
     
     def _is_likely_person_name(self, text: str) -> bool:
         """Check if text is likely a person name using multiple heuristics."""
@@ -457,7 +522,7 @@ class AnonymizationEngine:
     
     async def anonymize(self, text: str, custom_settings: Optional[Dict[str, Any]] = None) -> AnonymizationResult:
         """
-        Anonymize text based on settings.
+        Anonymize text based on settings with automatic language detection.
         
         Args:
             text: Text to anonymize
@@ -467,6 +532,9 @@ class AnonymizationEngine:
             AnonymizationResult with the processed text and metadata
         """
         start_time = time.perf_counter()
+        
+        # Detect language and select appropriate NLP model
+        self._select_nlp_model(text)
         
         if custom_settings:
             # Create temporary settings object with custom values

@@ -41,9 +41,28 @@ class FastAnonymizer:
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         )
         
-        # Téléphone français - Formats courants avec séparateurs
+        # Téléphone - Support international optimisé
         self.pattern_cache['phone'] = re.compile(
-            r'(?:\+33|0033|0)\s?[1-9](?:[\s.-]?[0-9]{2}){4}|(?:0[1-9](?:[\s.-]?[0-9]{2}){4})'
+            r'''(?x)
+            (?<!\d)  # Ne pas suivre un chiffre
+            (?:
+                # Format international avec parenthèses optionnelles
+                (?:\+|00)\d{1,3}[\s\-\.]*
+                (?:\(\d{1,4}\)[\s\-\.]*)?  # Ex: +1 (555)
+                (?:\(0\)[\s\-\.]*)?
+                \d{1,4}(?:[\s\-\.]\d{2,4}){1,4}
+                |
+                # Format français national
+                0[1-9][\s\-]?(?:\d{2}[\s\-]?){4}
+                |
+                # Format US : (XXX) XXX-XXXX ou XXX-XXX-XXXX
+                (?:\(\d{3}\)|\d{3})[\s\-\.]?\d{3}[\s\-\.]\d{4}
+                |
+                # Format générique
+                (?:\d{2,4}[\s\-]\d{2,4}[\s\-]\d{2,4}(?:[\s\-]\d{2,4})*)
+            )
+            (?![\.\d])  # Éviter les IP
+            '''
         )
         
         # Adresses IP

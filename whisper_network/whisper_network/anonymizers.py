@@ -8,10 +8,13 @@ Copyright (c) 2025 Sylvain JOLY, NANO by NXO
 
 import re
 import asyncio
+import logging
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import time
+
+logger = logging.getLogger(__name__)
 
 try:
     import spacy
@@ -377,19 +380,19 @@ class AnonymizationEngine:
             try:
                 self.nlp_fr = spacy.load("fr_core_news_sm")
                 self.nlp = self.nlp_fr  # Default to French
-                print("✅ Modèle spaCy français chargé")
+                logger.info("spaCy French model loaded successfully")
             except OSError:
-                print("⚠️  Modèle spaCy français non trouvé. Détection de noms FR désactivée.")
+                logger.warning("spaCy French model not found. FR name detection disabled.")
             
             # Load English model
             try:
                 self.nlp_en = spacy.load("en_core_web_sm")
-                print("✅ Modèle spaCy anglais chargé")
+                logger.info("spaCy English model loaded successfully")
             except OSError:
-                print("⚠️  Modèle spaCy anglais non trouvé. Détection de noms EN désactivée.")
+                logger.warning("spaCy English model not found. EN name detection disabled.")
             
             if not self.nlp_fr and not self.nlp_en:
-                print("❌ Aucun modèle spaCy disponible. Détection de noms désactivée.")
+                logger.error("No spaCy models available. Name detection disabled.")
     
     def _detect_language(self, text: str) -> str:
         """
@@ -1065,7 +1068,7 @@ class AnonymizationEngine:
             return anonymized_text, matches
             
         except Exception as e:
-            print(f"⚠️  Erreur NLP: {e}. Utilisation du fallback regex.")
+            logger.warning(f"NLP error: {e}. Falling back to regex-based name detection.")
             return await self._anonymize_names_regex(text, token)
     
     async def _anonymize_names_regex(self, text: str, token: str) -> Tuple[str, List[AnonymizationMatch]]:

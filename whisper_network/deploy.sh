@@ -69,25 +69,32 @@ print_success() {
 cleanup_existing() {
     print_step "Nettoyage des conteneurs existants..."
     
-    # Arrêter le conteneur s'il tourne
-    if docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
-        print_warning "Arrêt du conteneur ${CONTAINER_NAME}..."
-        docker stop ${CONTAINER_NAME} || true
-    fi
-    
-    # Supprimer le conteneur s'il existe
-    if docker ps -aq -f name=${CONTAINER_NAME} | grep -q .; then
-        print_warning "Suppression du conteneur ${CONTAINER_NAME}..."
-        docker rm ${CONTAINER_NAME} || true
+    # Utiliser docker-compose pour arrêter et supprimer proprement
+    if docker-compose ps -q | grep -q .; then
+        print_warning "Arrêt des conteneurs via docker-compose..."
+        docker-compose down || true
+    else
+        # Fallback sur docker si docker-compose n'a rien trouvé
+        # Arrêter le conteneur s'il tourne
+        if docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
+            print_warning "Arrêt du conteneur ${CONTAINER_NAME}..."
+            docker stop ${CONTAINER_NAME} || true
+        fi
+        
+        # Supprimer le conteneur s'il existe
+        if docker ps -aq -f name=${CONTAINER_NAME} | grep -q .; then
+            print_warning "Suppression du conteneur ${CONTAINER_NAME}..."
+            docker rm ${CONTAINER_NAME} || true
+        fi
     fi
     
     print_success "Nettoyage terminé"
 }
 
 build_image() {
-    print_step "Build de l'image Docker ${IMAGE_NAME}..."
+    print_step "Build de l'image Docker via docker-compose..."
     
-    if docker build -t ${IMAGE_NAME}:latest . ; then
+    if docker-compose build --no-cache ; then
         print_success "Image construite avec succès"
     else
         print_error "Échec du build de l'image"
@@ -96,15 +103,9 @@ build_image() {
 }
 
 run_container() {
-    print_step "Démarrage du conteneur..."
+    print_step "Démarrage du conteneur via docker-compose..."
     
-    docker run -d \
-        --name ${CONTAINER_NAME} \
-        -p ${HOST_PORT}:${CONTAINER_PORT} \
-        --restart unless-stopped \
-        ${IMAGE_NAME}:latest
-    
-    if [ $? -eq 0 ]; then
+    if docker-compose up -d ; then
         print_success "Conteneur démarré sur le port ${HOST_PORT}"
     else
         print_error "Échec du démarrage du conteneur"
@@ -184,10 +185,11 @@ show_info() {
     echo -e "  ${GREEN}ReDoc:${NC}          http://localhost:${HOST_PORT}/redoc"
     echo ""
     echo -e "  ${GREEN}Commandes utiles:${NC}"
-    echo -e "    docker logs ${CONTAINER_NAME} -f       # Voir les logs"
-    echo -e "    docker exec -it ${CONTAINER_NAME} bash # Shell interactif"
-    echo -e "    docker stop ${CONTAINER_NAME}          # Arrêter"
-    echo -e "    docker restart ${CONTAINER_NAME}       # Redémarrer"
+    echo -e "    docker-compose logs -f               # Voir les logs"
+    echo -e "    docker-compose exec whisper-network bash # Shell interactif"
+    echo -e "    docker-compose stop                  # Arrêter"
+    echo -e "    docker-compose restart               # Redémarrer"
+    echo -e "    docker-compose down                  # Arrêter et supprimer"
     echo ""
 }
 
@@ -233,10 +235,10 @@ case "${1:-}" in
         print_success "Nettoyage terminé"
         ;;
     logs)
-        docker logs ${CONTAINER_NAME} -f
+        docker-compose logs -f
         ;;
     shell)
-        docker exec -it ${CONTAINER_NAME} bash
+        docker-compose exec whisper-network bash
         ;;
     test)
         run_test

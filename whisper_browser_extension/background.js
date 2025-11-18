@@ -156,6 +156,7 @@ async function anonymizeText(text, customSettings) {
         const settings = await new Promise((resolve) => {
             chrome.storage.sync.get({
                 apiUrl: 'http://localhost:8001',
+                apiKey: '',
                 processingMode: 'fast',
                 anonymize_names: true,
                 anonymize_email: true,
@@ -190,9 +191,19 @@ async function anonymizeText(text, customSettings) {
             }
         };
         
+        // Préparer les headers
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        // Ajouter l'API Key si configurée
+        if (finalSettings.apiKey && finalSettings.apiKey.trim() !== '') {
+            headers['X-API-Key'] = finalSettings.apiKey;
+        }
+        
         const response = await fetch(`${finalSettings.apiUrl}${endpoint}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(requestData)
         });
         

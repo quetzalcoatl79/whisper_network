@@ -37,6 +37,7 @@ class WhisperPopup {
     return {
       enabled: true,
       apiUrl: 'http://localhost:8001',
+      apiKey: '',
       processingMode: 'fast', // 'fast' ou 'complete'
       anonymize_names: true,
       anonymize_email: true,
@@ -78,6 +79,7 @@ class WhisperPopup {
     
     // Configuration API
     document.getElementById('apiUrl').value = this.settings.apiUrl || 'http://localhost:8001';
+    document.getElementById('apiKey').value = this.settings.apiKey || '';
     
     // Mode de traitement
     const modeRadio = document.querySelector(`input[name="processingMode"][value="${this.settings.processingMode || 'fast'}"]`);
@@ -111,6 +113,7 @@ class WhisperPopup {
     
     // Configuration API
     this.settings.apiUrl = document.getElementById('apiUrl').value;
+    this.settings.apiKey = document.getElementById('apiKey').value;
     
     // Mode de traitement
     const checkedMode = document.querySelector('input[name="processingMode"]:checked');

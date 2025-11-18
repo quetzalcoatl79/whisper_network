@@ -10,6 +10,8 @@ services:
       - "8001:8000"
     environment:
       - PYTHONPATH=/app
+    env_file:
+      - .env
     volumes:
       # Mount source code for development (comment out for production)
       - .:/app

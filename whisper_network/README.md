@@ -13,10 +13,39 @@ Une API FastAPI haute performance pour l'anonymisation de texte, conçue pour le
 ## 🚀 Fonctionnalités
 
 - **Anonymisation en temps réel** : Traitement asynchrone ultra-rapide
-- **Support multi-types** : IP, emails, téléphones, noms, adresses, URLs
-- **CORS intégré** : Prêt pour les extensions de navigateur
+- **Support multi-types** : IP, emails, téléphones, noms, adresses, URLs, cartes bancaires, IBAN, NIR
+- **Multi-langues** : Support français et anglais avec détection automatique
+- **CORS intégré** : Configuration sécurisée pour les extensions de navigateur
+- **Sécurité renforcée** : API Key, rate limiting, logs de sécurité
 - **API REST** : Documentation automatique avec Swagger/OpenAPI
-- **Configuration flexible** : Paramètres d'anonymisation personnalisables
+- **Configuration flexible** : Paramètres d'anonymisation personnalisables via `.env`
+
+## 🔐 Sécurité
+
+Whisper Network intègre plusieurs niveaux de protection :
+
+- ✅ **CORS restrictif** : Contrôle précis des origines autorisées
+- ✅ **API Key authentication** : Protection par clé d'API
+- ✅ **Rate limiting** : Protection anti-abus (configurable)
+- ✅ **Logs de sécurité** : Traçabilité des tentatives d'accès
+
+**Configuration rapide** :
+
+```bash
+# 1. Copier le template
+cp .env.example .env
+
+# 2. Générer une API Key sécurisée
+openssl rand -hex 32
+
+# 3. Éditer .env avec vos paramètres
+API_KEY=votre_clé_générée
+CORS_ORIGINS=https://chat.openai.com,https://votre-domaine.com
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=10
+```
+
+📖 **Documentation complète** : [SECURITY.md](./SECURITY.md)
 
 ## 📋 Prérequis
 
@@ -176,10 +205,11 @@ L'API est optimisée pour les extensions de navigateur avec :
 
 ```javascript
 async function anonymizeText(text, settings = {}) {
-  const response = await fetch('http://127.0.0.1:8000/anonymize', {
+  const response = await fetch('http://127.0.0.1:8001/anonymize', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-API-Key': 'votre_clé_api'  // Requis si API_KEY est configuré
     },
     body: JSON.stringify({
       text: text,
@@ -187,15 +217,26 @@ async function anonymizeText(text, settings = {}) {
     })
   });
   
+  if (!response.ok) {
+    if (response.status === 403) throw new Error('API Key invalide');
+    if (response.status === 429) throw new Error('Rate limit dépassé');
+    throw new Error('Erreur API');
+  }
+  
   return await response.json();
 }
 
 // Usage
-const result = await anonymizeText(
-  "Mon email est test@example.com", 
-  { anonymize_email: true }
-);
-console.log(result.anonymized_text); // "Mon email est ***EMAIL***"
+try {
+  const result = await anonymizeText(
+    "Mon email est test@example.com et mon téléphone est 06 12 34 56 78", 
+    { anonymize_email: true, anonymize_phone: true }
+  );
+  console.log(result.anonymized_text); 
+  // "Mon email est ***EMAIL_1*** et mon téléphone est ***PHONE_1***"
+} catch (error) {
+  console.error('Erreur:', error.message);
+}
 ```
 
 ## 🧪 Tests
@@ -270,32 +311,50 @@ flake8 .
 ./docker-run.sh cleanup
 ```
 
-## �📝 Structure du projet
+## 📝 Structure du projet
 
 ```
 whisper_network/
-├── main.py                  # Point d'entrée FastAPI
-├── whisper_network/         # Package principal
-│   ├── __init__.py         # Initialisation du package
-│   └── anonymizers.py      # Moteur d'anonymisation
-├── tests/                   # Tests unitaires
-│   └── test_main.py
-├── docker-compose.yml       # Configuration Docker Compose
-├── Dockerfile              # Image Docker
-├── docker-run.sh           # Script de gestion (Linux/macOS)
-├── docker-run.bat          # Script de gestion (Windows)
-├── .dockerignore           # Fichiers ignorés par Docker
-├── pyproject.toml          # Configuration du projet
-├── requirements.txt        # Dépendances Python
-└── README.md               # Documentation
+├── main.py                     # Point d'entrée FastAPI
+├── .env                        # Configuration (ne pas commiter!)
+├── .env.example                # Template de configuration
+├── SECURITY.md                 # Guide de sécurité complet
+├── whisper_network/            # Package principal
+│   ├── __init__.py            # Initialisation du package
+│   ├── anonymizers.py         # Moteur d'anonymisation multi-langues
+│   └── fast_anonymizer.py     # Moteur rapide (regex uniquement)
+├── tests/                      # Tests unitaires
+│   ├── test_main.py
+│   ├── test_multilingual.py   # Tests multi-langues
+│   └── test_phone_formats.py  # Tests formats téléphone
+├── test_security.sh            # Script de test de sécurité
+├── docker-compose.yml          # Configuration Docker Compose
+├── Dockerfile                  # Image Docker
+├── docker-run.sh               # Script de gestion (Linux/macOS)
+├── docker-run.bat              # Script de gestion (Windows)
+├── .dockerignore               # Fichiers ignorés par Docker
+├── pyproject.toml              # Configuration du projet
+├── requirements.txt            # Dépendances Python
+└── README.md                   # Documentation
 ```
 
 ## 🔒 Sécurité
 
-- L'API ne stocke aucun texte traité
-- Traitement en mémoire uniquement
-- CORS configuré (à adapter en production)
-- Validation des entrées avec Pydantic
+- ✅ **Aucune donnée stockée** : Traitement en mémoire uniquement
+- ✅ **API Key authentication** : Protection par clé d'API configurable
+- ✅ **Rate limiting** : Protection anti-abus (10 req/min par défaut)
+- ✅ **CORS restrictif** : Liste blanche d'origines autorisées
+- ✅ **Logs de sécurité** : Traçabilité des accès et tentatives
+- ✅ **Validation stricte** : Toutes entrées validées via Pydantic
+
+**⚠️ Avant production** : Consultez [SECURITY.md](./SECURITY.md) pour la configuration complète.
+
+### Test de sécurité rapide
+
+```bash
+# Tester tous les mécanismes de sécurité
+bash test_security.sh
+```
 
 ## �‍💻 Développeur
 

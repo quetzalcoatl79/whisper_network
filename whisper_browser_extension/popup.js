@@ -75,11 +75,21 @@ class WhisperPopup {
 
   updateUI() {
     // Activation principale
-    document.getElementById('enabledToggle').checked = this.settings.enabled;
+    const enabledToggle = document.getElementById('enabledToggle');
+    if (enabledToggle) {
+      enabledToggle.checked = this.settings.enabled;
+    }
     
     // Configuration API
-    document.getElementById('apiUrl').value = this.settings.apiUrl || 'http://localhost:8001';
-    document.getElementById('apiKey').value = this.settings.apiKey || '';
+    const apiUrl = document.getElementById('apiUrl');
+    if (apiUrl) {
+      apiUrl.value = this.settings.apiUrl || 'http://localhost:8001';
+    }
+    
+    const apiKey = document.getElementById('apiKey');
+    if (apiKey) {
+      apiKey.value = this.settings.apiKey || '';
+    }
     
     // Mode de traitement
     const modeRadio = document.querySelector(`input[name="processingMode"][value="${this.settings.processingMode || 'fast'}"]`);
@@ -100,8 +110,15 @@ class WhisperPopup {
     });
     
     // Options comportementales
-    document.getElementById('showPreview').checked = this.settings.showPreview;
-    document.getElementById('autoAnonymize').checked = this.settings.autoAnonymize;
+    const showPreview = document.getElementById('showPreview');
+    if (showPreview) {
+      showPreview.checked = this.settings.showPreview;
+    }
+    
+    const autoAnonymize = document.getElementById('autoAnonymize');
+    if (autoAnonymize) {
+      autoAnonymize.checked = this.settings.autoAnonymize;
+    }
     
     // Statistiques de performance
     this.updatePerformanceStats();
@@ -109,11 +126,21 @@ class WhisperPopup {
 
   collectSettings() {
     // Activation principale
-    this.settings.enabled = document.getElementById('enabledToggle').checked;
+    const enabledToggle = document.getElementById('enabledToggle');
+    if (enabledToggle) {
+      this.settings.enabled = enabledToggle.checked;
+    }
     
     // Configuration API
-    this.settings.apiUrl = document.getElementById('apiUrl').value;
-    this.settings.apiKey = document.getElementById('apiKey').value;
+    const apiUrl = document.getElementById('apiUrl');
+    if (apiUrl) {
+      this.settings.apiUrl = apiUrl.value;
+    }
+    
+    const apiKey = document.getElementById('apiKey');
+    if (apiKey) {
+      this.settings.apiKey = apiKey.value;
+    }
     
     // Mode de traitement
     const checkedMode = document.querySelector('input[name="processingMode"]:checked');
@@ -134,25 +161,41 @@ class WhisperPopup {
     });
     
     // Options comportementales
-    this.settings.showPreview = document.getElementById('showPreview').checked;
-    this.settings.autoAnonymize = document.getElementById('autoAnonymize').checked;
+    const showPreview = document.getElementById('showPreview');
+    if (showPreview) {
+      this.settings.showPreview = showPreview.checked;
+    }
+    
+    const autoAnonymize = document.getElementById('autoAnonymize');
+    if (autoAnonymize) {
+      this.settings.autoAnonymize = autoAnonymize.checked;
+    }
   }
 
   updatePerformanceStats() {
-    // Mettre à jour les statistiques de performance
+    // Mettre à jour les statistiques de performance (optionnel si les éléments existent)
     const totalProcessed = this.settings.totalProcessed || 0;
     const processingTimes = this.settings.processingTimes || [];
     const lastTime = this.settings.lastProcessingTime;
 
-    document.getElementById('totalProcessed').textContent = totalProcessed;
-    document.getElementById('lastProcessingTime').textContent = 
-      lastTime ? `${lastTime.toFixed(1)}ms` : '-';
+    const totalProcessedElem = document.getElementById('totalProcessed');
+    if (totalProcessedElem) {
+      totalProcessedElem.textContent = totalProcessed;
+    }
+    
+    const lastProcessingTimeElem = document.getElementById('lastProcessingTime');
+    if (lastProcessingTimeElem) {
+      lastProcessingTimeElem.textContent = lastTime ? `${lastTime.toFixed(1)}ms` : '-';
+    }
 
-    if (processingTimes.length > 0) {
-      const average = processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length;
-      document.getElementById('averageTime').textContent = `${average.toFixed(1)}ms`;
-    } else {
-      document.getElementById('averageTime').textContent = '-';
+    const averageTimeElem = document.getElementById('averageTime');
+    if (averageTimeElem) {
+      if (processingTimes.length > 0) {
+        const average = processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length;
+        averageTimeElem.textContent = `${average.toFixed(1)}ms`;
+      } else {
+        averageTimeElem.textContent = '-';
+      }
     }
   }
 
@@ -175,55 +218,112 @@ class WhisperPopup {
   }
 
   bindEvents() {
-    // Bouton sauvegarder
-    document.getElementById('saveBtn').addEventListener('click', async () => {
-      this.collectSettings();
-      const success = await this.saveSettings();
-      
-      if (success) {
-        this.showNotification('✅ Paramètres sauvegardés', 'success');
+    // Gestion des onglets
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.dataset.tab;
         
-        // Notifier les content scripts (si disponibles)
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { action: 'settingsChanged' }, (response) => {
-              if (chrome.runtime.lastError) {
-                // Content script pas disponible - pas grave, on continue
-                console.log('Content script not available:', chrome.runtime.lastError.message);
-              } else {
-                console.log('Settings updated in content script');
-              }
-            });
+        // Mettre à jour les boutons
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        
+        // Mettre à jour les contenus
+        tabContents.forEach(content => {
+          if (content.id === targetTab) {
+            content.classList.add('active');
+          } else {
+            content.classList.remove('active');
           }
         });
-      } else {
-        this.showNotification('❌ Erreur lors de la sauvegarde', 'error');
-      }
+      });
     });
+    
+    // Bouton sauvegarder
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async () => {
+        this.collectSettings();
+        const success = await this.saveSettings();
+        
+        if (success) {
+          this.showNotification('✅ Paramètres sauvegardés', 'success');
+          
+          // Notifier les content scripts (si disponibles)
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+              chrome.tabs.sendMessage(tabs[0].id, { action: 'settingsChanged' }, (response) => {
+                if (chrome.runtime.lastError) {
+                  // Content script pas disponible - pas grave, on continue
+                  console.log('Content script not available:', chrome.runtime.lastError.message);
+                } else {
+                  console.log('Settings updated in content script');
+                }
+              });
+            }
+          });
+        } else {
+          this.showNotification('❌ Erreur lors de la sauvegarde', 'error');
+        }
+      });
+    }
 
     // Bouton réinitialiser
-    document.getElementById('resetBtn').addEventListener('click', () => {
-      if (confirm('Voulez-vous vraiment réinitialiser tous les paramètres ?')) {
-        this.resetToDefaults();
-      }
-    });
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (confirm('Voulez-vous vraiment réinitialiser tous les paramètres ?')) {
+          this.resetToDefaults();
+        }
+      });
+    }
 
     // Test API
-    document.getElementById('testApiBtn').addEventListener('click', () => {
-      this.testApiConnection();
-    });
+    const testApiBtn = document.getElementById('testApiBtn');
+    if (testApiBtn) {
+      testApiBtn.addEventListener('click', () => {
+        this.testApiConnection();
+      });
+    }
 
     // Test d'anonymisation
-    document.getElementById('testAnonymizeBtn').addEventListener('click', () => {
-      this.testAnonymization();
-    });
+    const testAnonymizeBtn = document.getElementById('testAnonymizeBtn');
+    if (testAnonymizeBtn) {
+      testAnonymizeBtn.addEventListener('click', () => {
+        this.testAnonymization();
+      });
+    }
 
     // Auto-sauvegarde sur changement d'activation
-    document.getElementById('enabledToggle').addEventListener('change', async () => {
-      this.collectSettings();
-      await this.saveSettings();
-      this.updateStatusIndicator();
-    });
+    const enabledToggle = document.getElementById('enabledToggle');
+    if (enabledToggle) {
+      enabledToggle.addEventListener('change', async () => {
+        this.collectSettings();
+        await this.saveSettings();
+        this.updateStatusIndicator();
+      });
+    }
+    
+    // Boutons Tout activer / Tout désactiver
+    const enableAllBtn = document.getElementById('enableAllBtn');
+    if (enableAllBtn) {
+      enableAllBtn.addEventListener('click', () => {
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+          checkbox.checked = true;
+        });
+      });
+    }
+    
+    const disableAllBtn = document.getElementById('disableAllBtn');
+    if (disableAllBtn) {
+      disableAllBtn.addEventListener('click', () => {
+        document.querySelectorAll('input[type="checkbox"]:not(#enabledToggle)').forEach(checkbox => {
+          checkbox.checked = false;
+        });
+      });
+    }
   }
 
   async checkApiStatus() {
@@ -231,6 +331,12 @@ class WhisperPopup {
       chrome.runtime.sendMessage({ action: 'testApi' }, (response) => {
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
+        
+        if (!statusIndicator || !statusText) {
+          console.warn('Status elements not found in DOM');
+          resolve();
+          return;
+        }
         
         if (chrome.runtime.lastError) {
           console.error('Error testing API:', chrome.runtime.lastError);
@@ -250,6 +356,8 @@ class WhisperPopup {
 
   async testApiConnection() {
     const button = document.getElementById('testApiBtn');
+    if (!button) return;
+    
     const originalText = button.textContent;
     
     console.log('🔧 Test API - Début');
@@ -257,9 +365,12 @@ class WhisperPopup {
     button.disabled = true;
     
     // Mettre à jour l'URL API
-    this.settings.apiUrl = document.getElementById('apiUrl').value;
-    console.log('🔧 URL API:', this.settings.apiUrl);
-    await this.saveSettings();
+    const apiUrlInput = document.getElementById('apiUrl');
+    if (apiUrlInput) {
+      this.settings.apiUrl = apiUrlInput.value;
+      console.log('🔧 URL API:', this.settings.apiUrl);
+      await this.saveSettings();
+    }
     
     // Tester la connexion
     chrome.runtime.sendMessage({ action: 'testApi' }, (response) => {
@@ -285,6 +396,11 @@ class WhisperPopup {
     const testInput = document.getElementById('testInput');
     const testResult = document.getElementById('testResult');
     const button = document.getElementById('testAnonymizeBtn');
+    
+    if (!testInput || !testResult || !button) {
+      console.warn('Test anonymization elements not found in DOM');
+      return;
+    }
     
     const text = testInput.value.trim();
     console.log('🔧 Test anonymisation - Texte:', text);
@@ -375,6 +491,11 @@ class WhisperPopup {
   updateStatusIndicator() {
     const indicator = document.getElementById('statusIndicator');
     const text = document.getElementById('statusText');
+    
+    if (!indicator || !text) {
+      console.warn('Status indicator elements not found in DOM');
+      return;
+    }
     
     if (this.settings.enabled) {
       indicator.className = 'status-indicator enabled';

@@ -432,12 +432,20 @@ class AnonymizationEngine:
     def _is_likely_person_name(self, text: str) -> bool:
         """Check if text is likely a person name using multiple heuristics."""
         # Skip common words that aren't names
-        common_words = {'bonjour', 'hello', 'salut', 'contact', 'développé', 'serveur', 'client', 'projet'}
+        common_words = {
+            'bonjour', 'hello', 'salut', 'contact', 'développé', 'serveur', 'client', 'projet',
+            'world', 'true', 'false', 'none', 'null', 'informations', 'information',
+            'def', 'class', 'return', 'print', 'import', 'from'  # Python keywords
+        }
         if text.lower() in common_words:
             return False
         
         words = text.split()
         if len(words) < 1 or len(words) > 3:  # Names usually have 1-3 words
+            return False
+        
+        # Skip if contains code-like patterns
+        if any(char in text for char in ['(', ')', '{', '}', '[', ']', '=', ':', ';', '"', "'"]):
             return False
         
         # Check if it matches our improved name patterns
@@ -553,18 +561,15 @@ class AnonymizationEngine:
             mapper = ConsistencyMapper() if settings.use_consistent_tokens else None
             
             # PHASE 1: Collect all matches without applying them yet
-            # ORDER MATTERS: Process broader contexts (addresses) before specific entities (names)
+            # ORDER MATTERS: Process regex patterns FIRST to protect them from NER
             raw_matches = []
             
-            # === ADDRESSES FIRST (to capture complete addresses before individual names) ===
-            if settings.anonymize_addresses:
-                _, address_matches = await self._anonymize_addresses(text, settings.address_token)
-                raw_matches.extend(address_matches)
+            # === REGEX PATTERNS FIRST (to protect structured data) ===
+            # Process emails, phones, IPs, URLs BEFORE NER to avoid breaking them
             
-            # === THEN TECHNICAL DATA ===
-            if settings.anonymize_nir:
-                _, nir_matches = await self._anonymize_nir(text, settings.nir_token)
-                raw_matches.extend(nir_matches)
+            if settings.anonymize_email:
+                _, email_matches = await self._anonymize_email(text, settings.email_token)
+                raw_matches.extend(email_matches)
             
             if settings.anonymize_phone:
                 _, phone_matches = await self._anonymize_phone(text, settings.phone_token)
@@ -575,25 +580,29 @@ class AnonymizationEngine:
                 _, ip_matches = await self._anonymize_ip_intelligent(text, settings)
                 raw_matches.extend(ip_matches)
             
-            if settings.anonymize_email:
-                _, email_matches = await self._anonymize_email(text, settings.email_token)
-                raw_matches.extend(email_matches)
-            
             if settings.anonymize_urls:
                 _, url_matches = await self._anonymize_urls(text, settings.url_token)
                 raw_matches.extend(url_matches)
             
-            # === NAMES LAST (to avoid conflicts with address components) ===
+            if settings.anonymize_nir:
+                _, nir_matches = await self._anonymize_nir(text, settings.nir_token)
+                raw_matches.extend(nir_matches)
+            
+            # === THEN ADDRESSES (broader context before specific names) ===
+            if settings.anonymize_addresses:
+                _, address_matches = await self._anonymize_addresses(text, settings.address_token)
+                raw_matches.extend(address_matches)
+            
+            # === NAMES LAST (to avoid conflicts with address components and protected patterns) ===
             if settings.anonymize_names:
                 _, name_matches = await self._anonymize_names(text, settings.name_token)
-                # Filter out name matches that overlap with address matches
+                # Filter out name matches that overlap with ANY existing match (emails, addresses, etc.)
                 filtered_name_matches = []
                 for name_match in name_matches:
-                    # Check if this name overlaps with any address
+                    # Check if this name overlaps with any existing match
                     overlaps = any(
-                        max(name_match.start, addr_match.start) < min(name_match.end, addr_match.end)
-                        for addr_match in raw_matches 
-                        if addr_match.type == AnonymizationType.ADDRESS
+                        max(name_match.start, existing_match.start) < min(name_match.end, existing_match.end)
+                        for existing_match in raw_matches
                     )
                     if not overlaps:
                         filtered_name_matches.append(name_match)
@@ -932,28 +941,45 @@ class AnonymizationEngine:
             # Find different types of entities
             for ent in doc.ents:
                 if ent.label_ == "PER":  # Person entity in French model
+                    # CRITICAL: Strip trailing whitespace from entity to preserve formatting
+                    entity_text = ent.text.rstrip()
+                    if not entity_text:  # Skip if only whitespace
+                        continue
+                    
+                    # Adjust end position to exclude trailing whitespace
+                    end_pos = ent.start_char + len(entity_text)
+                    
                     matches.append(AnonymizationMatch(
                         type=AnonymizationType.NAME,
                         start=ent.start_char,
-                        end=ent.end_char,
-                        original_text=ent.text,
+                        end=end_pos,  # Use adjusted end position
+                        original_text=entity_text,  # Use cleaned text
                         replacement=token
                     ))
                 elif ent.label_ == "ORG":  # Organization - can contain sensitive internal refs
+                    entity_text = ent.text.rstrip()
+                    if not entity_text:
+                        continue
+                    end_pos = ent.start_char + len(entity_text)
+                    
                     matches.append(AnonymizationMatch(
                         type=AnonymizationType.INTERNAL_COMMUNICATION,
                         start=ent.start_char,
-                        end=ent.end_char,
-                        original_text=ent.text,
+                        end=end_pos,
+                        original_text=entity_text,
                         replacement="***ORG***"
                     ))
                 elif ent.label_ == "LOC":  # Location - but could be a person name with title
+                    entity_text = ent.text.rstrip()
+                    if not entity_text:
+                        continue
+                    
                     # Check if it starts with a title (Mr, Mme, Dr, etc.) - likely a person
-                    if any(ent.text.lower().startswith(title) for title in ['mr', 'mme', 'mlle', 'dr', 'm.', 'mme.', 'dr.']):
+                    if any(entity_text.lower().startswith(title) for title in ['mr', 'mme', 'mlle', 'dr', 'm.', 'mme.', 'dr.']):
                         # Extract just the name part (remove verbs and other words)
                         import re
                         name_pattern = r'((?:Mr|Mme|Mlle|Dr|M\.|Mme\.|Dr\.)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)'
-                        name_match = re.search(name_pattern, ent.text, re.IGNORECASE)
+                        name_match = re.search(name_pattern, entity_text, re.IGNORECASE)
                         if name_match:
                             name_text = name_match.group(1)
                             name_start = ent.start_char + name_match.start(1)
@@ -967,39 +993,46 @@ class AnonymizationEngine:
                             ))
                         else:
                             # Fallback: use the whole entity as name
+                            end_pos = ent.start_char + len(entity_text)
                             matches.append(AnonymizationMatch(
                                 type=AnonymizationType.NAME,
                                 start=ent.start_char,
-                                end=ent.end_char,
-                                original_text=ent.text,
+                                end=end_pos,
+                                original_text=entity_text,
                                 replacement=token
                             ))
                     else:
                         # Real location
+                        end_pos = ent.start_char + len(entity_text)
                         matches.append(AnonymizationMatch(
                             type=AnonymizationType.LOCATION,
                             start=ent.start_char,
-                            end=ent.end_char,
-                            original_text=ent.text,
+                            end=end_pos,
+                            original_text=entity_text,
                             replacement="***LOCATION***"
                         ))
                 elif ent.label_ == "MISC":  # Miscellaneous - can contain IDs, refs, or names
+                    entity_text = ent.text.rstrip()
+                    if not entity_text:
+                        continue
+                    end_pos = ent.start_char + len(entity_text)
+                    
                     # Check if it looks like an ID or reference (contains digits)
-                    if any(char.isdigit() for char in ent.text) and len(ent.text) > 3:
+                    if any(char.isdigit() for char in entity_text) and len(entity_text) > 3:
                         matches.append(AnonymizationMatch(
                             type=AnonymizationType.EMPLOYEE_ID,
                             start=ent.start_char,
-                            end=ent.end_char,
-                            original_text=ent.text,
+                            end=end_pos,
+                            original_text=entity_text,
                             replacement="***ID***"
                         ))
                     # Check if it looks like a person name with better heuristics
-                    elif self._is_likely_person_name(ent.text):
+                    elif self._is_likely_person_name(entity_text):
                         matches.append(AnonymizationMatch(
                             type=AnonymizationType.NAME,
                             start=ent.start_char,
-                            end=ent.end_char,
-                            original_text=ent.text,
+                            end=end_pos,
+                            original_text=entity_text,
                             replacement=token
                         ))
             

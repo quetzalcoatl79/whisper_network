@@ -1,0 +1,16 @@
+Ex: Si Mr Dupont achete à Mme Machin un objet, est ce que Mr Dupont aura une réduction  ?
+Mr Nom1 achete a Mme Nom2, est ce que Mr Nom1 aura une réduction ? (moins de confusion dans le cas ou il y en a plein) 
+
+Ex technique : 
+voici ma configuration réseau : 
+Serveur DHCP : 192.168.1.200
+Serveur DNS : 192.168.1.200
+IP Switch : 192.168.1.200
+IP serveur : 192.168.1.100 
+--> 
+Serveur DHCP : IP1
+Serveur DNS : IP1
+IP Switch : IP1
+IP serveur : IP2
+
+plus cohérent pour comprendre que le DNS et le DHCP sont sur le switch

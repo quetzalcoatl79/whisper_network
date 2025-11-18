@@ -63,8 +63,8 @@
   },
   
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Whisper Network - Configuration",
+    "default_popup": "popup-file.html",
+    "default_title": "Whisper Network - Anonymisation Texte & Fichiers",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

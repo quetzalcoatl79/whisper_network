@@ -1,0 +1,11 @@
+Bonjour,
+
+Je suis NOM_1 NOM_2, développeur chez TechCorp.
+Mon email: EMAIL_1
+Mon téléphone: TEL_1
+
+Adresse:
+    15 rue de la Paix
+    75002 NOM_3
+
+Cordialement

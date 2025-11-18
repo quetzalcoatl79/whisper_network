@@ -8,6 +8,8 @@ https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.7.
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 # Détection automatique de langue
 langdetect>=1.0.9
+# File handling
+chardet>=5.2.0
 # Sécurité & Configuration
 python-dotenv>=1.0.0
 slowapi>=0.1.9

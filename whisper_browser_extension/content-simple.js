@@ -130,17 +130,23 @@ async function anonymizeCurrentField() {
                 if (field.tagName === 'TEXTAREA' || field.tagName === 'INPUT') {
                     field.value = response.anonymized_text;
                 } else if (field.contentEditable === 'true' || field.getAttribute('contenteditable') === 'true') {
-                    // Pour contenteditable, remplacer intelligemment
+                    // Pour contenteditable, préserver les sauts de ligne
+                    // Remplacer \n par <br> pour respecter le format HTML
+                    const formattedText = response.anonymized_text
+                        .split('\n')
+                        .map(line => line || '<br>') // Lignes vides = <br>
+                        .join('<br>');
+                    
                     if (field.querySelector('p')) {
-                        // Si contient des paragraphes, mettre le texte dans le premier
+                        // Si contient des paragraphes, remplacer le contenu du premier
                         const firstP = field.querySelector('p');
-                        firstP.textContent = response.anonymized_text;
+                        firstP.innerHTML = formattedText;
                         // Supprimer les autres paragraphes
                         const otherPs = Array.from(field.querySelectorAll('p')).slice(1);
                         otherPs.forEach(p => p.remove());
                     } else {
-                        // Sinon, remplacer directement
-                        field.innerHTML = `<p>${response.anonymized_text}</p>`;
+                        // Sinon, créer un paragraphe avec le texte formaté
+                        field.innerHTML = `<p>${formattedText}</p>`;
                     }
                 }
 

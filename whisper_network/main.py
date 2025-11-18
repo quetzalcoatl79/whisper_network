@@ -7,21 +7,24 @@ Developed by Sylvain JOLY, NANO by NXO
 License: MIT
 """
 
-from fastapi import FastAPI, HTTPException, Security, Request
+from fastapi import FastAPI, HTTPException, Security, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import uvicorn
 from datetime import datetime
 import os
 import logging
+import io
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from whisper_network import AnonymizationEngine, AnonymizationSettings
 from whisper_network.fast_anonymizer import FastAnonymizer
+from whisper_network.file_handler import FileHandler
 
 # Load environment variables
 load_dotenv()
@@ -79,6 +82,7 @@ app.add_middleware(
 # Initialize anonymization engines
 anonymization_engine = AnonymizationEngine()
 fast_anonymizer = FastAnonymizer()  # Moteur optimisé pour modèles locaux
+file_handler = FileHandler()  # Gestionnaire de fichiers
 
 # Request/Response models
 def get_default_anonymization_settings():
@@ -107,9 +111,23 @@ class AnonymizeResponse(BaseModel):
     processing_time_ms: float
     mapping_summary: Optional[Dict[str, Dict[str, str]]] = None
 
+class FileAnonymizeResponse(BaseModel):
+    success: bool
+    original_filename: str
+    anonymized_filename: str
+    file_size_bytes: int
+    file_type: str
+    anonymizations_count: int
+    processing_time_ms: float
+    mapping_summary: Optional[Dict[str, Dict[str, str]]] = None
+
 class SettingsResponse(BaseModel):
     success: bool
     settings: Dict[str, bool]
+
+class FileInfoResponse(BaseModel):
+    supported_extensions: Dict[str, list]
+    max_file_size: Dict[str, float]
 
 # Anonymization processing using the advanced engine
 async def process_anonymization_legacy(text: str, settings: Dict[str, bool]) -> tuple[str, int]:
@@ -248,6 +266,102 @@ async def get_default_settings():
         success=True,
         settings=default_settings
     )
+
+@app.get("/file/info", response_model=FileInfoResponse)
+async def get_file_info():
+    """Get information about supported file types and size limits."""
+    return FileInfoResponse(
+        supported_extensions=file_handler.get_supported_extensions(),
+        max_file_size=file_handler.get_file_size_limit()
+    )
+
+@app.post("/anonymize-file")
+@limiter_decorator
+async def anonymize_file(
+    request: Request,
+    file: UploadFile = File(...),
+    use_fast: bool = False,
+    api_key: str = Security(verify_api_key)
+):
+    """
+    Anonymize a text file while preserving its format.
+    
+    Supports:
+    - Text files: .txt, .md, .log
+    - Config files: .conf, .ini, .yaml, .json, .toml, .env
+    - Scripts: .sh, .py, .js, etc.
+    
+    Args:
+        file: Uploaded file (multipart/form-data)
+        use_fast: Use fast anonymizer (default: False)
+    
+    Returns:
+        Anonymized file as download with original format preserved
+    
+    Requires: X-API-Key header (if API_KEY is configured)
+    Rate limited: As per RATE_LIMIT_PER_MINUTE environment variable
+    """
+    try:
+        logger.info(f"File anonymization request from {get_remote_address(request)}: {file.filename}")
+        
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        # Read file bytes
+        file_bytes = await file.read()
+        
+        # Parse file
+        file_info = await file_handler.parse_file(file.filename, file_bytes)
+        logger.info(f"File parsed: {file_info.filename} ({file_info.file_type.value}, {file_info.size_bytes} bytes)")
+        
+        # Get default settings
+        settings = get_default_anonymization_settings()
+        
+        # Anonymize content using appropriate engine
+        if use_fast:
+            anonymizer = FastAnonymizer()
+            result = await anonymizer.anonymize_fast(file_info.content, settings)
+        else:
+            result = await anonymization_engine.anonymize(file_info.content, settings)
+        
+        if not result.success:
+            logger.error(f"File anonymization failed: {'; '.join(result.errors)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Anonymization failed: {'; '.join(result.errors)}"
+            )
+        
+        # Export anonymized file
+        new_filename, anonymized_bytes = await file_handler.export_file(
+            file_info.filename,
+            result.anonymized_text,
+            file_info.encoding
+        )
+        
+        logger.info(f"File anonymization successful: {new_filename} ({result.anonymizations_count} replacements)")
+        
+        # Return file as download
+        return StreamingResponse(
+            io.BytesIO(anonymized_bytes),
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{new_filename}"',
+                "X-Anonymizations-Count": str(result.anonymizations_count),
+                "X-Processing-Time-Ms": str(result.processing_time_ms),
+                "X-Original-Filename": file_info.filename,
+                "X-File-Type": file_info.file_type.value
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # Validation errors from file_handler
+        logger.warning(f"File validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error during file anonymization")
+        raise HTTPException(status_code=500, detail=f"File anonymization failed: {str(e)}")
 
 if __name__ == "__main__":
     # Load configuration from environment

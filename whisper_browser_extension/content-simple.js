@@ -120,10 +120,24 @@ async function anonymizeCurrentField() {
             return;
         }
 
-        // Envoyer au background script
+        // Get session ID for this tab/conversation
+        let sessionId = null;
+        if (typeof sessionManager !== 'undefined') {
+            try {
+                // Use URL as conversation key (could be enhanced with actual conversation ID)
+                sessionId = await sessionManager.getSessionId(0, window.location.href);
+                console.log(`📌 Using session ID: ${sessionId}`);
+            } catch (error) {
+                console.warn('⚠️ Could not get session ID:', error);
+            }
+        }
+
+        // Envoyer au background script avec session_id
         chrome.runtime.sendMessage({
             action: 'anonymize',
-            text: text
+            text: text,
+            session_id: sessionId,
+            preserve_mapping: true
         }, function(response) {
             field.style.opacity = '1';
 

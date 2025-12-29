@@ -22,6 +22,48 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - whisper-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: whisper-network-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - whisper-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: whisper-network-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: whisper_network
+      POSTGRES_USER: whisper_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whisper_user -d whisper_network"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - whisper-network
 
@@ -42,3 +84,9 @@ services:
 networks:
   whisper-network:
     driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local

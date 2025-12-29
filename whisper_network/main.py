@@ -7,24 +7,32 @@ Developed by Sylvain JOLY, NANO by NXO
 License: MIT
 """
 
-from fastapi import FastAPI, HTTPException, Security, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Security, Request, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, Dict, Any
 import uvicorn
 from datetime import datetime
 import os
 import logging
 import io
+import uuid
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from whisper_network import AnonymizationEngine, AnonymizationSettings
 from whisper_network.fast_anonymizer import FastAnonymizer
 from whisper_network.file_handler import FileHandler
+from whisper_network.session_manager import get_session_manager
+from whisper_network.cache_manager import get_cache
+from whisper_network.database import get_db, init_db, close_db
+from whisper_network.models import UserPreferences
 
 # Load environment variables
 load_dotenv()
@@ -47,7 +55,12 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def verify_api_key(api_key: str = Security(api_key_header)):
     """Verify API key if configured."""
-    if API_KEY and api_key != API_KEY:
+    # Skip verification if API_KEY is empty or None (development mode)
+    if not API_KEY or API_KEY.strip() == "":
+        logger.debug("API Key verification disabled (development mode)")
+        return None
+    
+    if api_key != API_KEY:
         logger.warning(f"Unauthorized access attempt with invalid API key")
         raise HTTPException(status_code=403, detail="Invalid API key")
     return api_key
@@ -84,6 +97,21 @@ anonymization_engine = AnonymizationEngine()
 fast_anonymizer = FastAnonymizer()  # Moteur optimisé pour modèles locaux
 file_handler = FileHandler()  # Gestionnaire de fichiers
 
+# Lifecycle events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection on startup."""
+    logger.info("🚀 Starting Whisper Network API...")
+    await init_db()
+    logger.info("✅ Database initialized")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection on shutdown."""
+    logger.info("🛑 Shutting down Whisper Network API...")
+    await close_db()
+    logger.info("✅ Database connections closed")
+
 # Request/Response models
 def get_default_anonymization_settings():
     """Retourne les settings par défaut pour l'anonymisation."""
@@ -102,6 +130,9 @@ def get_default_anonymization_settings():
 class AnonymizeRequest(BaseModel):
     text: str
     settings: Dict[str, bool] = Field(default_factory=get_default_anonymization_settings)
+    session_id: Optional[str] = Field(None, description="Optional session ID for mapping persistence")
+    ttl: int = Field(3600, ge=60, le=86400, description="Cache TTL in seconds (1h default, max 24h)")
+    preserve_mapping: bool = Field(True, description="Store mappings for de-anonymization")
 
 class AnonymizeResponse(BaseModel):
     success: bool
@@ -110,6 +141,19 @@ class AnonymizeResponse(BaseModel):
     anonymizations_count: int
     processing_time_ms: float
     mapping_summary: Optional[Dict[str, Dict[str, str]]] = None
+    session_id: Optional[str] = Field(None, description="Session ID if mapping preserved")
+
+class DeanonymizeRequest(BaseModel):
+    text: str
+    session_id: str = Field(..., description="Session ID containing mappings")
+
+class DeanonymizeResponse(BaseModel):
+    success: bool
+    original_text: str
+    deanonymized_text: str
+    replacements_count: int
+    processing_time_ms: float
+    session_id: str
 
 class FileAnonymizeResponse(BaseModel):
     success: bool
@@ -182,6 +226,26 @@ async def anonymize_text(request: Request, body: AnonymizeRequest, api_key: str 
             logger.error(f"Anonymization failed: {'; '.join(result.errors)}")
             raise HTTPException(status_code=500, detail=f"Anonymization failed: {'; '.join(result.errors)}")
         
+        session_id = None
+        
+        # Store mappings if requested
+        if body.preserve_mapping and result.mapping_summary:
+            session_manager = get_session_manager()
+            
+            # Use provided session_id or create new one
+            if body.session_id:
+                session_id = body.session_id
+            else:
+                session_id = session_manager.create_session(ttl=body.ttl)
+            
+            # Store mappings
+            session_manager.store_mappings(
+                session_id=session_id,
+                mappings=result.mapping_summary,
+                ttl=body.ttl
+            )
+            logger.info(f"Stored mappings for session: {session_id}")
+        
         logger.info(f"Anonymization successful: {result.anonymizations_count} replacements")
         return AnonymizeResponse(
             success=result.success,
@@ -189,7 +253,8 @@ async def anonymize_text(request: Request, body: AnonymizeRequest, api_key: str 
             anonymized_text=result.anonymized_text,
             anonymizations_count=result.anonymizations_count,
             processing_time_ms=result.processing_time_ms,
-            mapping_summary=result.mapping_summary
+            mapping_summary=result.mapping_summary,
+            session_id=session_id
         )
     
     except HTTPException:
@@ -362,6 +427,347 @@ async def anonymize_file(
     except Exception as e:
         logger.exception("Unexpected error during file anonymization")
         raise HTTPException(status_code=500, detail=f"File anonymization failed: {str(e)}")
+
+# ============================================================================
+# SESSION & DE-ANONYMIZATION ENDPOINTS
+# ============================================================================
+
+@app.post("/deanonymize", response_model=DeanonymizeResponse)
+@limiter_decorator
+async def deanonymize_text(request: Request, body: DeanonymizeRequest, api_key: str = Security(verify_api_key)):
+    """
+    De-anonymize text using stored session mappings.
+    Replaces ***XXX_N*** tokens with original values.
+    
+    - **text**: Text containing anonymized tokens
+    - **session_id**: Session ID with stored mappings
+    
+    Requires: X-API-Key header (if API_KEY is configured)
+    Rate limited: As per RATE_LIMIT_PER_MINUTE environment variable
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"De-anonymization request from {get_remote_address(request)} for session: {body.session_id}")
+        
+        if not body.text:
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+        session_manager = get_session_manager()
+        
+        # Check if session exists
+        if not session_manager.session_exists(body.session_id):
+            raise HTTPException(status_code=404, detail=f"Session not found: {body.session_id}")
+        
+        # De-anonymize
+        deanonymized = session_manager.deanonymize_text(body.session_id, body.text)
+        
+        if deanonymized is None:
+            raise HTTPException(status_code=404, detail=f"No mappings found for session: {body.session_id}")
+        
+        # Count replacements
+        replacements = body.text.count("***") // 2  # Rough estimate
+        
+        processing_time = (time.time() - start_time) * 1000
+        
+        logger.info(f"De-anonymization successful: {replacements} replacements")
+        return DeanonymizeResponse(
+            success=True,
+            original_text=body.text,
+            deanonymized_text=deanonymized,
+            replacements_count=replacements,
+            processing_time_ms=processing_time,
+            session_id=body.session_id
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error during de-anonymization")
+        raise HTTPException(status_code=500, detail=f"De-anonymization failed: {str(e)}")
+
+@app.get("/session/{session_id}/mappings")
+@limiter_decorator
+async def get_session_mappings(request: Request, session_id: str, api_key: str = Security(verify_api_key)):
+    """
+    Get all mappings for a session.
+    Useful for debugging or displaying mapping table in extension.
+    
+    - **session_id**: Session identifier
+    
+    Returns: {entity_type: {original: anonymized}}
+    """
+    try:
+        session_manager = get_session_manager()
+        
+        if not session_manager.session_exists(session_id):
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        
+        mappings = session_manager.get_mappings(session_id)
+        stats = session_manager.get_session_stats(session_id)
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "mappings": mappings,
+            "stats": stats
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error retrieving session mappings")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/session/{session_id}")
+@limiter_decorator
+async def delete_session(request: Request, session_id: str, api_key: str = Security(verify_api_key)):
+    """
+    Delete a session and all its mappings.
+    
+    - **session_id**: Session identifier
+    """
+    try:
+        session_manager = get_session_manager()
+        
+        if not session_manager.session_exists(session_id):
+            raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+        
+        session_manager.delete_session(session_id)
+        
+        return {
+            "success": True,
+            "message": f"Session deleted: {session_id}"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error deleting session")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cache/stats")
+async def get_cache_stats(api_key: str = Security(verify_api_key)):
+    """Get cache statistics (Redis or in-memory)."""
+    try:
+        cache = get_cache()
+        return cache.get_stats()
+    except Exception as e:
+        logger.exception("Error getting cache stats")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# 🔐 User Preferences Endpoints (PostgreSQL)
+# ============================================
+# ⚠️ SÉCURITÉ : Stockage UNIQUEMENT des préférences UI
+# ❌ JAMAIS de mappings d'anonymisation (restent en Redis)
+# ============================================
+
+class PreferencesSaveRequest(BaseModel):
+    """Request model pour sauvegarder les préférences."""
+    uuid: str = Field(..., description="UUID utilisateur (généré par extension)")
+    preferences: Dict[str, Any] = Field(..., description="Préférences UI (checkboxes, langue, thème)")
+    
+    @validator('uuid')
+    def validate_uuid(cls, v):
+        """Valider le format UUID."""
+        try:
+            uuid.UUID(v)
+            return v
+        except ValueError:
+            raise ValueError("Invalid UUID format")
+    
+    @validator('preferences')
+    def validate_preferences(cls, v):
+        """Valider que les préférences ne contiennent pas de données sensibles."""
+        if not UserPreferences.validate_preferences(v):
+            raise ValueError(
+                "Invalid preferences: only UI settings allowed (anonymize_*, language, theme, etc.). "
+                "Forbidden: emails, names, mappings, personal data."
+            )
+        return v
+
+class PreferencesLoadRequest(BaseModel):
+    """Request model pour charger les préférences."""
+    uuid: str = Field(..., description="UUID utilisateur")
+    
+    @validator('uuid')
+    def validate_uuid(cls, v):
+        try:
+            uuid.UUID(v)
+            return v
+        except ValueError:
+            raise ValueError("Invalid UUID format")
+
+class PreferencesResponse(BaseModel):
+    """Response model pour les préférences."""
+    success: bool
+    uuid: str
+    preferences: Dict[str, Any]
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+@app.post("/api/preferences/save")
+@limiter_decorator
+async def save_preferences(
+    request: Request,
+    request_data: PreferencesSaveRequest,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Security(verify_api_key)
+):
+    """
+    💾 Sauvegarder les préférences utilisateur (UPSERT).
+    
+    ⚠️ SÉCURITÉ :
+    - Stocke UNIQUEMENT les préférences UI (checkboxes, config)
+    - JAMAIS de mappings d'anonymisation (restent en Redis)
+    - JAMAIS de données confidentielles (emails, noms, etc.)
+    
+    Args:
+        request: FastAPI Request (required for rate limiter)
+        request_data: UUID + preferences dict
+        db: Database session (auto-injected)
+    
+    Returns:
+        Success status + saved preferences
+    """
+    start_time = datetime.now()
+    
+    try:
+        user_uuid = uuid.UUID(request_data.uuid)
+        
+        # UPSERT: Insert or Update if exists
+        stmt = insert(UserPreferences).values(
+            uuid=user_uuid,
+            preferences=request_data.preferences
+        ).on_conflict_do_update(
+            index_elements=["uuid"],
+            set_={
+                "preferences": request_data.preferences,
+                "updated_at": datetime.now()
+            }
+        ).returning(UserPreferences)
+        
+        result = await db.execute(stmt)
+        await db.commit()
+        
+        saved_prefs = result.scalar_one()
+        
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        logger.info(f"✅ Preferences saved for UUID {user_uuid} in {processing_time:.2f}ms")
+        
+        return PreferencesResponse(
+            success=True,
+            uuid=str(saved_prefs.uuid),
+            preferences=saved_prefs.preferences,
+            created_at=saved_prefs.created_at.isoformat() if saved_prefs.created_at else None,
+            updated_at=saved_prefs.updated_at.isoformat() if saved_prefs.updated_at else None
+        )
+        
+    except ValueError as e:
+        logger.warning(f"⚠️ Invalid UUID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"❌ Error saving preferences: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save preferences")
+
+@app.post("/api/preferences/load")
+@limiter_decorator
+async def load_preferences(
+    request: Request,
+    request_data: PreferencesLoadRequest,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Security(verify_api_key)
+):
+    """
+    📥 Charger les préférences utilisateur.
+    
+    Args:
+        request: FastAPI Request (required for rate limiter)
+        request_data: UUID utilisateur
+        db: Database session (auto-injected)
+    
+    Returns:
+        Preferences dict ou {} si non trouvé
+    """
+    start_time = datetime.now()
+    
+    try:
+        user_uuid = uuid.UUID(request_data.uuid)
+        
+        # SELECT by UUID
+        result = await db.get(UserPreferences, user_uuid)
+        
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        
+        if result:
+            logger.info(f"✅ Preferences loaded for UUID {user_uuid} in {processing_time:.2f}ms")
+            return PreferencesResponse(
+                success=True,
+                uuid=str(result.uuid),
+                preferences=result.preferences,
+                created_at=result.created_at.isoformat() if result.created_at else None,
+                updated_at=result.updated_at.isoformat() if result.updated_at else None
+            )
+        else:
+            logger.info(f"⚠️ No preferences found for UUID {user_uuid}, returning defaults")
+            return PreferencesResponse(
+                success=True,
+                uuid=str(user_uuid),
+                preferences={},  # Retourner objet vide si pas trouvé
+                created_at=None,
+                updated_at=None
+            )
+        
+    except ValueError as e:
+        logger.warning(f"⚠️ Invalid UUID: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"❌ Error loading preferences: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load preferences")
+
+@app.delete("/api/preferences/{user_uuid}")
+@limiter_decorator
+async def delete_preferences(
+    request: Request,
+    user_uuid: str,
+    db: AsyncSession = Depends(get_db),
+    api_key: str = Security(verify_api_key)
+):
+    """
+    🗑️ Supprimer les préférences utilisateur (RGPD - droit à l'oubli).
+    
+    Args:
+        request: FastAPI Request (required for rate limiter)
+        user_uuid: UUID utilisateur
+        db: Database session (auto-injected)
+    
+    Returns:
+        Success status
+    """
+    try:
+        user_id = uuid.UUID(user_uuid)
+        
+        result = await db.get(UserPreferences, user_id)
+        if result:
+            await db.delete(result)
+            await db.commit()
+            logger.info(f"✅ Preferences deleted for UUID {user_id}")
+            return {"success": True, "message": "Preferences deleted"}
+        else:
+            logger.warning(f"⚠️ No preferences found for UUID {user_id}")
+            raise HTTPException(status_code=404, detail="Preferences not found")
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"❌ Error deleting preferences: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete preferences")
 
 if __name__ == "__main__":
     # Load configuration from environment

@@ -153,6 +153,45 @@
             <span class="description">FR76 1234... → IBAN_1</span>
           </div>
         </label>
+        
+        <!-- 🆕 Section RH / Entreprise -->
+        <h4 style="margin-top: 15px; margin-bottom: 10px; color: #666; font-size: 13px;">🏢 Données RH / Entreprise</h4>
+        
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_matricule" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Matricules employés</span>
+            <span class="description">EMP12345 → MATRICULE_1</span>
+          </div>
+        </label>
+        
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_salaire" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Salaires</span>
+            <span class="description">3500€ brut → SALAIRE_1</span>
+          </div>
+        </label>
+        
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_evaluation" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Évaluations RH</span>
+            <span class="description">Note: A+ → EVALUATION_1</span>
+          </div>
+        </label>
+        
+        <label class="checkbox-item">
+          <input type="checkbox" id="anonymize_planning" checked>
+          <span class="checkmark"></span>
+          <div>
+            <span class="title">Plannings / Horaires</span>
+            <span class="description">09h-17h → PLANNING_1</span>
+          </div>
+        </label>
       </div>
     </div>
 
@@ -218,6 +257,31 @@
       <button id="saveBtn" class="btn-primary">Sauvegarder</button>
       <button id="resetBtn" class="btn-secondary">Réinitialiser</button>
     </div>
+    
+    <!-- Configuration Persistence (Mode Développeur) -->
+    <div class="section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 16px; margin-top: 10px; border-radius: 12px; color: white; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+      <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 20px;">💾</span>
+        <span>Sauvegarde Configuration</span>
+      </h3>
+      <p style="font-size: 12px; opacity: 0.95; margin: 0 0 12px 0; line-height: 1.4;">
+        🔄 Auto-backup dans localStorage activé.<br>
+        💡 Exportez pour sauvegarder sur fichier (survit au reload en dev).
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+        <button id="exportConfigBtn" class="btn-secondary" style="background: white; color: #667eea; font-weight: 600; font-size: 12px; border: none; padding: 8px; border-radius: 8px; cursor: pointer; transition: transform 0.2s;">
+          📥 Exporter JSON
+        </button>
+        <button id="importConfigBtn" class="btn-secondary" style="background: rgba(255,255,255,0.2); color: white; font-weight: 600; font-size: 12px; border: 2px solid white; padding: 8px; border-radius: 8px; cursor: pointer; transition: transform 0.2s;">
+          📤 Importer JSON
+        </button>
+      </div>
+      <div id="backupStatus" style="background: rgba(255,255,255,0.15); padding: 8px; border-radius: 6px; font-size: 11px; display: flex; justify-content: space-between; align-items: center;">
+        <span>📌 Dernière sauvegarde :</span>
+        <span id="lastBackupTime" style="font-weight: 600;">Jamais</span>
+      </div>
+    </div>
+    <input type="file" id="importConfigFile" accept=".json" style="display: none;">
 
     <!-- Footer info -->
     <div class="footer">
@@ -226,6 +290,8 @@
     </div>
   </div>
 
+  <!-- Scripts - Charger preferences-manager AVANT popup.js -->
+  <script src="config-persistence.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

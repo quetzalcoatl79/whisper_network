@@ -8,17 +8,25 @@
 chrome.runtime.onInstalled.addListener(() => {
     console.log('🛡️ Whisper Network File Anonymizer installed');
     
-    // Initialize default settings (aligned with API)
+    // Initialize default settings in SYNC storage (persists across devices via Google account)
     chrome.storage.sync.set({
+        enabled: true,
+        apiUrl: 'http://localhost:8001',
         anonymize_names: true,
         anonymize_email: true,
         anonymize_phone: true,
         anonymize_address: true,
         anonymize_nir: true,
         anonymize_iban: true,
-        anonymize_credit_card: false,
-        anonymize_ip: false,
-        anonymize_url: false
+        anonymize_credit_cards: true,
+        anonymize_ip: true,
+        anonymize_urls: true,
+        anonymize_matricule: true,
+        anonymize_salaire: true,
+        anonymize_evaluation: true,
+        anonymize_planning: true,
+        showPreview: true,
+        autoAnonymize: false
     });
 
     // Initialize statistics
@@ -32,7 +40,8 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Listen for messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Background received message:', message);
+    console.log('[background.js] 📨 Message received:', message);
+    console.log('[background.js] 📍 Sender:', sender.tab ? 'content script' : 'popup');
     
     // Handle file anonymization statistics
     if (message.type === 'FILE_ANONYMIZED') {
@@ -43,6 +52,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Handle settings requests from popup
     if (message.action === 'getSettings') {
+        console.log('[background.js] 🔍 getSettings request received');
         chrome.storage.sync.get({
             enabled: true,
             apiUrl: 'http://localhost:8001',
@@ -59,19 +69,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             showPreview: true,
             autoAnonymize: false
         }, (settings) => {
-            sendResponse({success: true, settings: settings});
+            console.log('[background.js] 📦 Settings loaded from storage.sync:', settings);
+            const response = {success: true, settings: settings};
+            console.log('[background.js] ✉️ Sending response:', response);
+            sendResponse(response);
         });
         return true; // Keep message channel open for async response
     }
     
     // Handle settings save from popup
     if (message.action === 'saveSettings') {
+        console.log('[background.js] Saving settings to chrome.storage.sync:', message.settings);
         chrome.storage.sync.set(message.settings, () => {
             if (chrome.runtime.lastError) {
-                console.error('Error saving settings:', chrome.runtime.lastError);
+                console.error('[background.js] ❌ Error saving settings:', chrome.runtime.lastError);
                 sendResponse({success: false, error: chrome.runtime.lastError.message});
             } else {
-                console.log('Settings saved successfully');
+                console.log('[background.js] ✅ Settings saved successfully to chrome.storage.sync');
+                // Verify save by reading back
+                chrome.storage.sync.get(null, (all) => {
+                    console.log('[background.js] 🔍 All sync storage after save:', all);
+                });
                 sendResponse({success: true});
             }
         });
@@ -91,7 +109,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Handle text anonymization from popup
     if (message.action === 'anonymize') {
-        anonymizeText(message.text, message.settings).then(result => {
+        anonymizeText(
+            message.text, 
+            message.settings,
+            message.session_id,
+            message.preserve_mapping
+        ).then(result => {
             sendResponse(result);
         }).catch(error => {
             console.error('Anonymization failed:', error);
@@ -109,9 +132,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             anonymize_address: true,
             anonymize_nir: true,
             anonymize_iban: true,
-            anonymize_credit_card: false,
-            anonymize_ip: false,
-            anonymize_url: false
+            anonymize_credit_cards: true,
+            anonymize_ip: true,
+            anonymize_urls: true
         }, (settings) => {
             sendResponse(settings);
         });
@@ -151,7 +174,7 @@ async function testApiConnection() {
 }
 
 // Text anonymization function
-async function anonymizeText(text, customSettings) {
+async function anonymizeText(text, customSettings, sessionId = null, preserveMapping = true) {
     try {
         const settings = await new Promise((resolve) => {
             chrome.storage.sync.get({
@@ -164,9 +187,9 @@ async function anonymizeText(text, customSettings) {
                 anonymize_address: true,
                 anonymize_nir: true,
                 anonymize_iban: true,
-                anonymize_credit_cards: false,
-                anonymize_ip: false,
-                anonymize_urls: false
+                anonymize_credit_cards: true,
+                anonymize_ip: true,
+                anonymize_urls: true
             }, resolve);
         });
         
@@ -188,7 +211,11 @@ async function anonymizeText(text, customSettings) {
                 anonymize_credit_cards: finalSettings.anonymize_credit_cards,
                 anonymize_ip: finalSettings.anonymize_ip,
                 anonymize_urls: finalSettings.anonymize_urls
-            }
+            },
+            // Add session management fields
+            session_id: sessionId,
+            preserve_mapping: preserveMapping,
+            ttl: 7200 // 2 hours
         };
         
         // Préparer les headers
@@ -307,7 +334,8 @@ chrome.storage.local.get({totalFiles: 0}, (data) => {
 // Update badge when statistics change
 chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'local' && changes.totalFiles) {
-        const count = changes.filesProcessed.newValue || 0;
+        // Vérifier que filesProcessed existe avant d'accéder à newValue
+        const count = changes.filesProcessed?.newValue || 0;
         chrome.action.setBadgeText({
             text: count > 0 ? count.toString() : ''
         });

@@ -91,6 +91,38 @@ class FastAnonymizer:
         self.pattern_cache['url'] = re.compile(
             r'https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:[\w.])*)?)?'
         )
+        
+        # ========================================
+        # 🆕 PATTERNS RH / ENTREPRISE
+        # ========================================
+        
+        # Matricules employés (formats courants)
+        # EMP12345, MAT-0001, EMPL_ABC123, etc.
+        self.pattern_cache['matricule'] = re.compile(
+            r'\b(?:EMP|MAT|EMPL|MATR|EMPLOYEE)[-_]?[A-Z0-9]{4,10}\b',
+            re.IGNORECASE
+        )
+        
+        # Salaires (montants avec devise)
+        # 3500€ brut, 2800 EUR net, 45000€/an, etc.
+        self.pattern_cache['salaire'] = re.compile(
+            r'\b\d{3,6}(?:[,\.]\d{2})?\s*(?:€|EUR|euros?|dollars?|\$)\s*(?:brut|net|mensuel|annuel|/an|/mois)?\b',
+            re.IGNORECASE
+        )
+        
+        # Évaluations / Notes RH
+        # Note: A+, Performance: 4/5, Évaluation: Excellent, etc.
+        self.pattern_cache['evaluation'] = re.compile(
+            r'\b(?:note|évaluation|performance|appréciation)\s*:?\s*(?:[A-E][+-]?|[0-5]/[0-5]|excellent|très bien|bien|moyen|insuffisant)\b',
+            re.IGNORECASE
+        )
+        
+        # Plannings / Horaires
+        # 09h00-17h30, 9:00-17:00, Shift: Matin, etc.
+        self.pattern_cache['planning'] = re.compile(
+            r'\b(?:horaire|planning|shift|poste)\s*:?\s*(?:\d{1,2}[h:]\d{2}[-–]\d{1,2}[h:]\d{2}|matin|après-midi|nuit|jour)\b',
+            re.IGNORECASE
+        )
     
     def _get_consistent_token(self, category: str, original: str, base_token: str) -> str:
         """
@@ -132,7 +164,12 @@ class FastAnonymizer:
                 ('anonymize_credit_cards', 'credit_card', 'CB'),
                 ('anonymize_iban', 'iban', 'IBAN'),
                 ('anonymize_nir', 'nir', 'NIR'),
-                ('anonymize_urls', 'url', 'URL')
+                ('anonymize_urls', 'url', 'URL'),
+                # 🆕 Patterns RH/Entreprise
+                ('anonymize_matricule', 'matricule', 'MATRICULE'),
+                ('anonymize_salaire', 'salaire', 'SALAIRE'),
+                ('anonymize_evaluation', 'evaluation', 'EVALUATION'),
+                ('anonymize_planning', 'planning', 'PLANNING')
             ]
             
             for setting_key, pattern_key, token_base in anonymization_steps:

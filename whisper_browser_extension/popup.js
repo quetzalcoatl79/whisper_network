@@ -1,14 +1,18 @@
 /**
  * Popup Script - Interface de configuration de l'extension
+ * Utilise PreferencesManager pour persistance avec consentement RGPD
  */
 
 class WhisperPopup {
   constructor() {
     this.settings = {};
+    // Ne plus utiliser prefsManager dans la popup
+    this.prefsManager = null;
     this.init();
   }
 
   async init() {
+    // Plus besoin d'initialiser PreferencesManager
     await this.loadSettings();
     this.bindEvents();
     this.updateUI();
@@ -16,40 +20,138 @@ class WhisperPopup {
   }
 
   async loadSettings() {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: 'getSettings' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Error loading settings:', chrome.runtime.lastError);
-          // Use default settings if communication fails
-          this.settings = this.getDefaultSettings();
-        } else if (response && response.success) {
-          this.settings = response.settings;
-        } else {
-          console.error('Invalid response from background:', response);
-          this.settings = this.getDefaultSettings();
-        }
-        resolve();
+    console.log('[WhisperPopup] 🔄 Loading settings...');
+    
+    const defaults = this.getDefaultSettings();
+    
+    try {
+      // PRIORITÉ 1: Charger depuis backend PostgreSQL (multi-device sync)
+      const backendPrefs = await this.loadFromBackend();
+      if (backendPrefs && Object.keys(backendPrefs).length > 0) {
+        console.log('[WhisperPopup] ☁️ Loaded from backend:', backendPrefs);
+        this.settings = { ...defaults, ...backendPrefs };
+        
+        // Sync vers chrome.storage.sync et localStorage
+        await chrome.storage.sync.set(this.settings);
+        this.saveToLocalStorage(this.settings);
+        this.updateBackupStatus();
+        
+        return;
+      }
+      
+      console.log('[WhisperPopup] ⚠️ Backend empty, trying chrome.storage.sync...');
+    } catch (error) {
+      console.warn('[WhisperPopup] ⚠️ Backend load failed:', error);
+    }
+    
+    try {
+      // PRIORITÉ 2: Essayer chrome.storage.sync (persiste en production)
+      const syncSettings = await new Promise((resolve) => {
+        // NE PAS passer defaults ici, sinon ça fusionne avec les valeurs par défaut !
+        chrome.storage.sync.get(null, (items) => {
+          if (chrome.runtime.lastError) {
+            console.error('[WhisperPopup] ❌ chrome.storage.sync error:', chrome.runtime.lastError);
+            resolve(null);
+          } else {
+            resolve(items);
+          }
+        });
       });
-    });
+      
+      // Vérifier si on a vraiment des préférences (pas juste whisper_user_uuid)
+      const hasPreferences = syncSettings && Object.keys(syncSettings).filter(k => k !== 'whisper_user_uuid').length > 0;
+      
+      if (hasPreferences) {
+        console.log('[WhisperPopup] ✅ Loaded from chrome.storage.sync:', syncSettings);
+        this.settings = { ...defaults, ...syncSettings };
+        
+        // Backup automatique dans localStorage
+        this.saveToLocalStorage(this.settings);
+        this.updateBackupStatus();
+        
+        return;
+      }
+      
+      console.log('[WhisperPopup] ⚠️ chrome.storage.sync vide, trying localStorage...');
+    } catch (error) {
+      console.warn('[WhisperPopup] ⚠️ chrome.storage.sync failed:', error);
+    }
+    
+    // PRIORITÉ 3: localStorage backup
+    try {
+      const localBackup = this.loadFromLocalStorage();
+      if (localBackup && Object.keys(localBackup).length > 0) {
+        console.log('[WhisperPopup] 💾 Loaded from localStorage backup:', localBackup);
+        this.settings = localBackup;
+        return;
+      }
+    } catch (error) {
+      console.warn('[WhisperPopup] ⚠️ localStorage backup failed:', error);
+    }
+    
+    // PRIORITÉ 4: Utiliser defaults en dernier recours
+    console.error('[WhisperPopup] ❌ All loading methods failed, using defaults');
+    this.settings = this.getDefaultSettings();
   }
 
   getDefaultSettings() {
+    
+    // Fallback: defaults locaux
     return {
       enabled: true,
       apiUrl: 'http://localhost:8001',
       apiKey: '',
       processingMode: 'fast', // 'fast' ou 'complete'
+      
+      // === Données personnelles ===
       anonymize_names: true,
-      anonymize_email: true,
+      anonymize_addresses: true,
       anonymize_phone: true,
-      anonymize_address: true,
+      anonymize_email: true,
+      anonymize_birth_dates: true,
       anonymize_nir: true,
-      anonymize_iban: true,
-      anonymize_credit_cards: true,
+      anonymize_id_cards: true,
+      anonymize_passports: true,
       anonymize_ip: true,
+      anonymize_logins: true,
+      
+      // === Données professionnelles ===
+      anonymize_employee_ids: true,
+      anonymize_performance_data: true,
+      anonymize_salary_data: true,
+      anonymize_schedules: true,
+      anonymize_internal_comm: true,
+      
+      // === Données sensibles spécifiques ===
+      anonymize_medical_data: true,
+      anonymize_bank_accounts: true,
+      anonymize_credit_cards: true,
+      anonymize_iban: true,
+      anonymize_transactions: true,
+      anonymize_grades: true,
+      anonymize_legal_cases: true,
+      
+      // === Données contextuelles ===
+      anonymize_locations: true,
+      anonymize_geolocations: true,
+      anonymize_access_badges: true,
+      anonymize_photo_references: true,
+      anonymize_biometric: true,
       anonymize_urls: true,
+      
+      // === Anciens noms (compatibilité backward) ===
+      anonymize_address: true,
+      anonymize_matricule: true,
+      anonymize_salaire: true,
+      anonymize_evaluation: true,
+      anonymize_planning: true,
+      
+      // Options UI
       showPreview: true,
       autoAnonymize: false,
+      autoDeanonymize: true, // NOUVEAU: dé-anonymisation automatique
+      preserveMapping: true, // NOUVEAU: conserver les mappings
+      
       // Statistiques de performance
       totalProcessed: 0,
       processingTimes: [],
@@ -58,15 +160,32 @@ class WhisperPopup {
   }
 
   async saveSettings() {
+    console.log('[WhisperPopup] 💾 Saving settings:', this.settings);
+    
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(
         { action: 'saveSettings', settings: this.settings },
-        (response) => {
+        async (response) => {
           if (chrome.runtime.lastError) {
-            console.error('Error saving settings:', chrome.runtime.lastError);
+            console.error('[WhisperPopup] ❌ Error saving settings:', chrome.runtime.lastError);
+            this.showNotification('❌ Erreur de sauvegarde', 'error');
             resolve(false);
+          } else if (response && response.success) {
+            console.log('[WhisperPopup] ✅ Settings saved to chrome.storage.sync');
+            
+            // 💾 Backup automatique dans localStorage
+            this.saveToLocalStorage(this.settings);
+            this.updateBackupStatus();
+            
+            // ☁️ Sync automatique vers backend PostgreSQL
+            await this.saveToBackend(this.settings);
+            
+            this.showNotification('✅ Paramètres sauvegardés', 'success');
+            resolve(true);
           } else {
-            resolve(response && response.success);
+            console.warn('[WhisperPopup] ⚠️ Failed to save settings');
+            this.showNotification('⚠️ Échec de la sauvegarde', 'warning');
+            resolve(false);
           }
         }
       );
@@ -95,18 +214,11 @@ class WhisperPopup {
     const modeRadio = document.querySelector(`input[name="processingMode"][value="${this.settings.processingMode || 'fast'}"]`);
     if (modeRadio) modeRadio.checked = true;
     
-    // Paramètres d'anonymisation
-    const anonymizationTypes = [
-      'anonymize_ip', 'anonymize_email', 'anonymize_phone', 'anonymize_nir',
-      'anonymize_names', 'anonymize_address', 'anonymize_urls', 
-      'anonymize_credit_cards', 'anonymize_iban'
-    ];
-    
-    anonymizationTypes.forEach(type => {
-      const element = document.getElementById(type);
-      if (element) {
-        element.checked = this.settings[type] || false;
-      }
+    // 🆕 TOUS les paramètres d'anonymisation (mise à jour automatique)
+    const allAnonymizationCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="anonymize_"]');
+    allAnonymizationCheckboxes.forEach(checkbox => {
+      // Utiliser la valeur sauvegardée, ou true par défaut si non défini
+      checkbox.checked = this.settings[checkbox.id] !== undefined ? this.settings[checkbox.id] : true;
     });
     
     // Options comportementales
@@ -146,18 +258,10 @@ class WhisperPopup {
     const checkedMode = document.querySelector('input[name="processingMode"]:checked');
     this.settings.processingMode = checkedMode ? checkedMode.value : 'fast';
     
-    // Paramètres d'anonymisation
-    const anonymizationTypes = [
-      'anonymize_ip', 'anonymize_email', 'anonymize_phone', 'anonymize_nir',
-      'anonymize_names', 'anonymize_address', 'anonymize_urls', 
-      'anonymize_credit_cards', 'anonymize_iban'
-    ];
-    
-    anonymizationTypes.forEach(type => {
-      const element = document.getElementById(type);
-      if (element) {
-        this.settings[type] = element.checked;
-      }
+    // 🆕 TOUS les paramètres d'anonymisation (collecte automatique)
+    const allAnonymizationCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="anonymize_"]');
+    allAnonymizationCheckboxes.forEach(checkbox => {
+      this.settings[checkbox.id] = checkbox.checked;
     });
     
     // Options comportementales
@@ -280,6 +384,30 @@ class WhisperPopup {
       });
     }
 
+    // 💾 Boutons Export/Import configuration
+    const exportBtn = document.getElementById('exportConfigBtn');
+    const importBtn = document.getElementById('importConfigBtn');
+    const importFile = document.getElementById('importConfigFile');
+    
+    if (exportBtn) {
+      exportBtn.addEventListener('click', async () => {
+        await this.exportConfig();
+      });
+    }
+    
+    if (importBtn && importFile) {
+      importBtn.addEventListener('click', () => {
+        importFile.click();
+      });
+      
+      importFile.addEventListener('change', async (e) => {
+        if (e.target.files.length > 0) {
+          await this.importConfigFromFile(e.target.files[0]);
+          e.target.value = ''; // Reset file input
+        }
+      });
+    }
+
     // Test API
     const testApiBtn = document.getElementById('testApiBtn');
     if (testApiBtn) {
@@ -322,6 +450,54 @@ class WhisperPopup {
         document.querySelectorAll('input[type="checkbox"]:not(#enabledToggle)').forEach(checkbox => {
           checkbox.checked = false;
         });
+      });
+    }
+    
+    // Boutons de configuration persistante (mode dev)
+    const exportConfigBtn = document.getElementById('exportConfigBtn');
+    if (exportConfigBtn) {
+      exportConfigBtn.addEventListener('click', async () => {
+        this.collectSettings();
+        const success = await window.configPersistence.exportConfig(this.settings);
+        if (success) {
+          this.showNotification('✅ Config exportée !', 'success');
+        }
+      });
+    }
+    
+    const importConfigBtn = document.getElementById('importConfigBtn');
+    if (importConfigBtn) {
+      importConfigBtn.addEventListener('click', async () => {
+        try {
+          const settings = await window.configPersistence.importConfig();
+          this.settings = settings;
+          this.updateUI();
+          await this.saveSettings();
+          this.showNotification('✅ Config importée et sauvegardée !', 'success');
+        } catch (error) {
+          this.showNotification('❌ Erreur d\'import', 'error');
+          console.error('Import failed:', error);
+        }
+      });
+    }
+    
+    const copyConfigBtn = document.getElementById('copyConfigBtn');
+    if (copyConfigBtn) {
+      copyConfigBtn.addEventListener('click', async () => {
+        this.collectSettings();
+        const success = await window.configPersistence.copyToClipboard(this.settings);
+        if (success) {
+          this.showNotification('✅ Config copiée dans le presse-papier !', 'success');
+        } else {
+          this.showNotification('❌ Erreur de copie', 'error');
+        }
+      });
+    }
+    
+    const helpConfigBtn = document.getElementById('helpConfigBtn');
+    if (helpConfigBtn) {
+      helpConfigBtn.addEventListener('click', () => {
+        window.configPersistence.showInstructions();
       });
     }
   }
@@ -525,6 +701,64 @@ class WhisperPopup {
     }, 3000);
   }
 
+
+
+  /**
+   * 🆕 Export des préférences (backup)
+   */
+  async exportPreferences() {
+    if (!this.prefsManager) return;
+    
+    const json = await this.prefsManager.export();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whisper-network-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    this.showNotification('✅ Backup exporté', 'success');
+  }
+
+  /**
+   * 🆕 Import des préférences (restore)
+   */
+  async importPreferences() {
+    if (!this.prefsManager) return;
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const success = await this.prefsManager.import(event.target.result);
+          
+          if (success) {
+            this.showNotification('✅ Backup restauré', 'success');
+            await this.loadSettings();
+            this.updateUI();
+          } else {
+            this.showNotification('❌ Fichier invalide', 'error');
+          }
+        } catch (error) {
+          console.error('[WhisperPopup] Import error:', error);
+          this.showNotification('❌ Erreur d\'import', 'error');
+        }
+      };
+      reader.readAsText(file);
+    };
+    
+    input.click();
+  }
+
   escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -553,9 +787,312 @@ class WhisperPopup {
     
     return count;
   }
+
+  /**
+   * 💾 Sauvegarder dans localStorage (backup automatique)
+   */
+  saveToLocalStorage(settings) {
+    try {
+      const backup = {
+        settings: settings,
+        timestamp: Date.now(),
+        version: '1.0'
+      };
+      localStorage.setItem('whisper_preferences_backup', JSON.stringify(backup));
+      console.log('[WhisperPopup] 💾 Backup saved to localStorage');
+    } catch (error) {
+      console.error('[WhisperPopup] ❌ localStorage save failed:', error);
+    }
+  }
+
+  /**
+   * 📂 Charger depuis localStorage
+   */
+  loadFromLocalStorage() {
+    try {
+      const backup = localStorage.getItem('whisper_preferences_backup');
+      if (!backup) return null;
+      
+      const parsed = JSON.parse(backup);
+      console.log('[WhisperPopup] 📂 Found localStorage backup from:', new Date(parsed.timestamp).toLocaleString());
+      
+      return parsed.settings;
+    } catch (error) {
+      console.error('[WhisperPopup] ❌ localStorage load failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 📥 Exporter la configuration vers fichier JSON
+   */
+  async exportConfig() {
+    try {
+      const exportData = {
+        settings: this.settings,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+      };
+      
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `whisper-config-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      this.showNotification('📥 Configuration exportée !', 'success');
+      console.log('[WhisperPopup] 📥 Config exported');
+    } catch (error) {
+      console.error('[WhisperPopup] ❌ Export failed:', error);
+      this.showNotification('❌ Erreur d\'export', 'error');
+    }
+  }
+
+  /**
+   * 📤 Importer la configuration depuis fichier JSON
+   */
+  async importConfigFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          
+          if (!data.settings) {
+            throw new Error('Format de fichier invalide');
+          }
+          
+          // Appliquer les settings importés
+          this.settings = data.settings;
+          this.updateUI();
+          await this.saveSettings();
+          
+          this.showNotification('✅ Configuration importée !', 'success');
+          console.log('[WhisperPopup] 📤 Config imported');
+          resolve(data.settings);
+        } catch (error) {
+          console.error('[WhisperPopup] ❌ Import failed:', error);
+          this.showNotification('❌ Erreur d\'import : ' + error.message, 'error');
+          reject(error);
+        }
+      };
+      
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * 🕐 Mettre à jour le statut de backup
+   */
+  updateBackupStatus() {
+    try {
+      const backup = localStorage.getItem('whisper_preferences_backup');
+      const statusEl = document.getElementById('lastBackupTime');
+      
+      if (backup && statusEl) {
+        const parsed = JSON.parse(backup);
+        const date = new Date(parsed.timestamp);
+        const timeStr = date.toLocaleString('fr-FR', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit'
+        });
+        statusEl.textContent = timeStr;
+      }
+    } catch (error) {
+      console.warn('[WhisperPopup] Could not update backup status:', error);
+    }
+  }
+
+  // ============================================
+  // 🔐 UUID + Backend Sync (PostgreSQL)
+  // ============================================
+  
+  /**
+   * 🆔 Obtenir ou générer UUID utilisateur
+   */
+  async getUserUUID() {
+    try {
+      const result = await chrome.storage.sync.get(['whisper_user_uuid']);
+      
+      if (result.whisper_user_uuid) {
+        console.log('[UUID] ✅ Existing UUID:', result.whisper_user_uuid);
+        return result.whisper_user_uuid;
+      }
+      
+      // Générer nouveau UUID
+      const newUuid = crypto.randomUUID();
+      await chrome.storage.sync.set({ whisper_user_uuid: newUuid });
+      console.log('[UUID] 🆕 Generated new UUID:', newUuid);
+      
+      return newUuid;
+    } catch (error) {
+      console.error('[UUID] ❌ Error:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * ☁️ Sauvegarder préférences vers backend PostgreSQL
+   */
+  async saveToBackend(preferences) {
+    try {
+      const uuid = await this.getUserUUID();
+      if (!uuid) {
+        console.warn('[Backend Sync] ⚠️ No UUID, skipping backend save');
+        return false;
+      }
+      
+      const apiUrl = this.settings.apiUrl || 'http://localhost:8001';
+      const apiKey = this.settings.apiKey || '';
+      
+      // Filtrer UNIQUEMENT les préférences UI (pas de mappings!)
+      const safePreferences = this.filterSafePreferences(preferences);
+      
+      console.log('[Backend Sync] 📤 Saving to backend...', { uuid, preferences: safePreferences });
+      
+      const response = await fetch(`${apiUrl}/api/preferences/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        body: JSON.stringify({
+          uuid: uuid,
+          preferences: safePreferences
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[Backend Sync] ✅ Saved successfully:', data);
+      
+      return true;
+    } catch (error) {
+      console.error('[Backend Sync] ❌ Save failed:', error);
+      // Ne pas bloquer l'application si le backend est down
+      return false;
+    }
+  }
+  
+  /**
+   * ☁️ Charger préférences depuis backend PostgreSQL
+   */
+  async loadFromBackend() {
+    try {
+      const uuid = await this.getUserUUID();
+      if (!uuid) {
+        console.warn('[Backend Sync] ⚠️ No UUID, skipping backend load');
+        return null;
+      }
+      
+      // Utiliser valeur par défaut si this.settings n'est pas encore défini
+      const apiUrl = (this.settings && this.settings.apiUrl) || 'http://localhost:8001';
+      const apiKey = (this.settings && this.settings.apiKey) || '';
+      
+      console.log('[Backend Sync] 📥 Loading from backend...', { uuid, apiUrl });
+      
+      const response = await fetch(`${apiUrl}/api/preferences/load`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey
+        },
+        body: JSON.stringify({ uuid: uuid })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.preferences && Object.keys(data.preferences).length > 0) {
+        console.log('[Backend Sync] ✅ Loaded successfully:', data.preferences);
+        return data.preferences;
+      } else {
+        console.log('[Backend Sync] ⚠️ No preferences found in backend');
+        return null;
+      }
+    } catch (error) {
+      console.error('[Backend Sync] ❌ Load failed:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 🔒 Filtrer les préférences sûres (UNIQUEMENT UI, pas de données confidentielles)
+   */
+  filterSafePreferences(preferences) {
+    const allowedKeys = [
+      // Configuration API
+      'enabled', 'apiUrl', 'apiKey', 'processingMode',
+      
+      // === Données personnelles ===
+      'anonymize_names', 'anonymize_addresses', 'anonymize_phone',
+      'anonymize_email', 'anonymize_birth_dates', 'anonymize_nir',
+      'anonymize_id_cards', 'anonymize_passports', 'anonymize_ip',
+      'anonymize_logins',
+      
+      // === Données professionnelles ===
+      'anonymize_employee_ids', 'anonymize_performance_data',
+      'anonymize_salary_data', 'anonymize_schedules', 'anonymize_internal_comm',
+      
+      // === Données sensibles spécifiques ===
+      'anonymize_medical_data', 'anonymize_bank_accounts',
+      'anonymize_credit_cards', 'anonymize_iban', 'anonymize_transactions',
+      'anonymize_grades', 'anonymize_legal_cases',
+      
+      // === Données contextuelles ===
+      'anonymize_locations', 'anonymize_geolocations',
+      'anonymize_access_badges', 'anonymize_photo_references',
+      'anonymize_biometric', 'anonymize_urls',
+      
+      // === Anciens noms (compatibilité) ===
+      'anonymize_address', 'anonymize_matricule', 'anonymize_salaire',
+      'anonymize_evaluation', 'anonymize_planning',
+      
+      // Options comportementales
+      'showPreview', 'autoAnonymize', 'autoDeanonymize', 'preserveMapping'
+    ];
+    
+    const safe = {};
+    for (const key of allowedKeys) {
+      if (key in preferences) {
+        safe[key] = preferences[key];
+      }
+    }
+    
+    console.log('[Backend Sync] 🔒 Filtered preferences:', safe);
+    return safe;
+  }
 }
 
 // Initialiser la popup quand le DOM est prêt
 document.addEventListener('DOMContentLoaded', () => {
   new WhisperPopup();
+});
+
+// 🆕 Écouter les messages de popup-advanced.html pour sync
+window.addEventListener('message', async (event) => {
+  if (event.source !== window) return;
+  
+  if (event.data.type === 'WHISPER_SYNC_TO_BACKEND') {
+    console.log('[Message Handler] 📨 Received sync request with UUID:', event.data.uuid);
+    
+    // Créer instance temporaire pour accéder aux méthodes
+    const popup = new WhisperPopup();
+    await popup.loadSettings();
+    await popup.saveToBackend(popup.settings);
+  }
 });

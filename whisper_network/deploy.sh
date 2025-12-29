@@ -114,15 +114,17 @@ run_container() {
 }
 
 wait_for_health() {
-    print_step "Attente du démarrage du service..."
+    print_step "Attente du démarrage des services..."
     
     local max_attempts=30
     local attempt=0
     
+    # Attendre l'API principale
+    echo -n "API principale"
     while [ $attempt -lt $max_attempts ]; do
         if curl -sf http://localhost:${HOST_PORT}/health > /dev/null 2>&1; then
-            print_success "Service opérationnel !"
-            return 0
+            print_success " ✓ API opérationnelle"
+            break
         fi
         
         echo -n "."
@@ -130,10 +132,30 @@ wait_for_health() {
         ((attempt++))
     done
     
+    if [ $attempt -eq $max_attempts ]; then
+        echo ""
+        print_error "L'API n'a pas démarré dans les temps"
+        docker logs ${CONTAINER_NAME} --tail 20
+        exit 1
+    fi
+    
+    # Vérifier Redis
+    echo -n "Redis"
+    if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+        print_success " ✓ Redis opérationnel"
+    else
+        print_warning " Redis non accessible (peut être normal)"
+    fi
+    
+    # Vérifier PostgreSQL
+    echo -n "PostgreSQL"
+    if docker-compose exec -T postgres pg_isready -U whisper_user -d whisper_network > /dev/null 2>&1; then
+        print_success " ✓ PostgreSQL opérationnel"
+    else
+        print_warning " PostgreSQL non accessible (peut être normal)"
+    fi
+    
     echo ""
-    print_error "Le service n'a pas démarré dans les temps"
-    docker logs ${CONTAINER_NAME} --tail 20
-    exit 1
 }
 
 run_health_check() {
@@ -179,17 +201,27 @@ show_info() {
     echo -e "${BLUE}║                    INFORMATIONS                              ║${NC}"
     echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "  ${GREEN}API URL:${NC}        http://localhost:${HOST_PORT}"
-    echo -e "  ${GREEN}Health Check:${NC}   http://localhost:${HOST_PORT}/health"
-    echo -e "  ${GREEN}Documentation:${NC}  http://localhost:${HOST_PORT}/docs"
-    echo -e "  ${GREEN}ReDoc:${NC}          http://localhost:${HOST_PORT}/redoc"
+    echo -e "  ${GREEN}Services déployés:${NC}"
+    echo -e "    • API Whisper Network  http://localhost:${HOST_PORT}"
+    echo -e "    • PostgreSQL           localhost:5432 (whisper_network)"
+    echo -e "    • Redis                localhost:6379"
+    echo ""
+    echo -e "  ${GREEN}Endpoints utiles:${NC}"
+    echo -e "    • Health Check:        http://localhost:${HOST_PORT}/health"
+    echo -e "    • Documentation:       http://localhost:${HOST_PORT}/docs"
+    echo -e "    • ReDoc:               http://localhost:${HOST_PORT}/redoc"
+    echo -e "    • Preferences Save:    POST /api/preferences/save"
+    echo -e "    • Preferences Load:    POST /api/preferences/load"
     echo ""
     echo -e "  ${GREEN}Commandes utiles:${NC}"
-    echo -e "    docker-compose logs -f               # Voir les logs"
-    echo -e "    docker-compose exec whisper-network bash # Shell interactif"
-    echo -e "    docker-compose stop                  # Arrêter"
-    echo -e "    docker-compose restart               # Redémarrer"
-    echo -e "    docker-compose down                  # Arrêter et supprimer"
+    echo -e "    docker-compose logs -f                        # Tous les logs"
+    echo -e "    docker-compose logs -f whisper-network        # Logs API"
+    echo -e "    docker-compose logs -f postgres               # Logs PostgreSQL"
+    echo -e "    docker-compose exec whisper-network bash      # Shell API"
+    echo -e "    docker-compose exec postgres psql -U whisper_user -d whisper_network  # SQL"
+    echo -e "    docker-compose stop                           # Arrêter"
+    echo -e "    docker-compose restart                        # Redémarrer"
+    echo -e "    docker-compose down                           # Arrêter et supprimer"
     echo ""
 }
 

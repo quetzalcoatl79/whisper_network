@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "lastSaved": null,
+  "settings": {
+    "enabled": true,
+    "apiUrl": "http://localhost:8001",
+    "apiKey": "",
+    "processingMode": "fast",
+    "anonymize_names": true,
+    "anonymize_email": true,
+    "anonymize_phone": true,
+    "anonymize_address": true,
+    "anonymize_nir": true,
+    "anonymize_iban": true,
+    "anonymize_credit_cards": true,
+    "anonymize_ip": true,
+    "anonymize_urls": true,
+    "anonymize_matricule": true,
+    "anonymize_salaire": true,
+    "anonymize_evaluation": true,
+    "anonymize_planning": true,
+    "showPreview": true,
+    "autoAnonymize": false
+  }
+}

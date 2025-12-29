@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper - Test de Persistance</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .test-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .test-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .test-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .test-result {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 10px;
+            background: #f1f3f5;
+            border-radius: 6px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .emoji {
+            font-size: 24px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .info-box p {
+            color: #0c5460;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test de Persistance</h1>
+        <p class="subtitle">Vérification du système de sauvegarde Whisper Network</p>
+        
+        <div class="info-box">
+            <p><strong>ℹ️ Instructions :</strong> Ouvrez cette page, puis ouvrez la popup de l'extension Whisper. 
+            Les tests ci-dessous vérifieront automatiquement la présence et le contenu du système de persistance.</p>
+        </div>
+        
+        <!-- Test 1 : localStorage -->
+        <div class="test-section">
+            <h2>
+                <span class="emoji">💾</span>
+                Test 1 : localStorage Backup
+                <span id="status1" class="status warning">En attente</span>
+            </h2>
+            <div class="test-item">
+                <div class="test-name">Présence du backup</div>
+                <div id="result1" class="test-result">En attente...</div>
+            </div>
+            <div class="test-item">
+                <div class="test-name">Horodatage</div>
+                <div id="result1b" class="test-result">En attente...</div>
+            </div>
+        </div>
+        
+        <!-- Test 2 : chrome.storage.sync -->
+        <div class="test-section">
+            <h2>
+                <span class="emoji">☁️</span>
+                Test 2 : chrome.storage.sync
+                <span id="status2" class="status warning">En attente</span>
+            </h2>
+            <div class="test-item">
+                <div class="test-name">Accès à chrome.storage</div>
+                <div id="result2" class="test-result">En attente...</div>
+            </div>
+        </div>
+        
+        <!-- Test 3 : Extension installée -->
+        <div class="test-section">
+            <h2>
+                <span class="emoji">🔌</span>
+                Test 3 : Extension
+                <span id="status3" class="status warning">En attente</span>
+            </h2>
+            <div class="test-item">
+                <div class="test-name">Extension détectée</div>
+                <div id="result3" class="test-result">En attente...</div>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <button onclick="runAllTests()">▶️ Lancer les tests</button>
+            <button onclick="clearBackup()">🗑️ Effacer backup localStorage</button>
+            <button onclick="location.reload()">🔄 Recharger la page</button>
+        </div>
+    </div>
+    
+    <script>
+        function setStatus(testId, status, message) {
+            const statusEl = document.getElementById(`status${testId}`);
+            const resultEl = document.getElementById(`result${testId}`);
+            
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = status === 'success' ? '✅ Réussi' : status === 'error' ? '❌ Échec' : '⏳ Test...';
+            
+            if (resultEl) {
+                resultEl.textContent = message;
+            }
+        }
+        
+        function test1_localStorage() {
+            console.log('[Test 1] Checking localStorage...');
+            
+            try {
+                const backup = localStorage.getItem('whisper_preferences_backup');
+                
+                if (!backup) {
+                    setStatus(1, 'error', '❌ Aucun backup trouvé dans localStorage.\n\nAction requise :\n1. Ouvrir la popup Whisper\n2. Modifier un paramètre\n3. Cliquer "Sauvegarder"\n4. Relancer ce test');
+                    return false;
+                }
+                
+                const parsed = JSON.parse(backup);
+                
+                if (!parsed.settings || !parsed.timestamp || !parsed.version) {
+                    setStatus(1, 'error', '❌ Format de backup invalide.\n\nContenu : ' + backup.substring(0, 200) + '...');
+                    return false;
+                }
+                
+                const date = new Date(parsed.timestamp);
+                const timeStr = date.toLocaleString('fr-FR');
+                
+                setStatus(1, 'success', `✅ Backup trouvé !\n\nTimestamp : ${parsed.timestamp} (${timeStr})\nVersion : ${parsed.version}\nNombre de paramètres : ${Object.keys(parsed.settings).length}\n\nAperçu :\n${JSON.stringify(parsed.settings, null, 2).substring(0, 400)}...`);
+                
+                // Test 1b : Horodatage
+                document.getElementById('result1b').textContent = `✅ Dernière sauvegarde : ${timeStr}`;
+                
+                return true;
+            } catch (error) {
+                setStatus(1, 'error', `❌ Erreur : ${error.message}\n\n${error.stack}`);
+                return false;
+            }
+        }
+        
+        function test2_chromeStorage() {
+            console.log('[Test 2] Checking chrome.storage...');
+            
+            if (typeof chrome === 'undefined' || !chrome.storage) {
+                setStatus(2, 'warning', '⚠️ API chrome.storage non disponible.\n\nCette page web ne peut pas accéder à chrome.storage.\nSeules les pages d\'extension (popup, background) peuvent y accéder.\n\nPour tester :\n1. Ouvrir la popup\n2. F12 pour DevTools\n3. Console : chrome.storage.sync.get(null, console.log)');
+                return false;
+            }
+            
+            // Note: Ce code ne s'exécutera QUE si on est dans le contexte d'une extension
+            chrome.storage.sync.get(null, (data) => {
+                if (chrome.runtime.lastError) {
+                    setStatus(2, 'error', `❌ Erreur chrome.storage : ${chrome.runtime.lastError.message}`);
+                    return;
+                }
+                
+                if (Object.keys(data).length === 0) {
+                    setStatus(2, 'warning', '⚠️ chrome.storage.sync est vide.\n\nCela est normal en mode développeur après un rechargement d\'extension.\nLe backup localStorage devrait le restaurer automatiquement.');
+                } else {
+                    setStatus(2, 'success', `✅ chrome.storage.sync contient ${Object.keys(data).length} paramètres.\n\nAperçu :\n${JSON.stringify(data, null, 2).substring(0, 400)}...`);
+                }
+            });
+            
+            return true;
+        }
+        
+        function test3_extension() {
+            console.log('[Test 3] Checking extension...');
+            
+            if (typeof chrome === 'undefined' || !chrome.runtime) {
+                setStatus(3, 'warning', '⚠️ Extension non détectée sur cette page.\n\nCette page web ne peut pas détecter l\'extension directement.\n\nPour vérifier :\n1. Aller sur chrome://extensions\n2. Chercher "Whisper Network"\n3. Vérifier qu\'elle est activée');
+                return false;
+            }
+            
+            setStatus(3, 'success', `✅ API chrome.runtime disponible.\n\nID : ${chrome.runtime.id || 'N/A'}`);
+            return true;
+        }
+        
+        function runAllTests() {
+            console.log('[Test Suite] Starting all tests...');
+            
+            setStatus(1, 'warning', '⏳ Test en cours...');
+            setStatus(2, 'warning', '⏳ Test en cours...');
+            setStatus(3, 'warning', '⏳ Test en cours...');
+            
+            setTimeout(() => {
+                const result1 = test1_localStorage();
+                const result2 = test2_chromeStorage();
+                const result3 = test3_extension();
+                
+                console.log('[Test Suite] Results:', { result1, result2, result3 });
+                
+                if (result1) {
+                    console.log('✅ SUCCÈS : Le système de persistance fonctionne !');
+                } else {
+                    console.log('❌ ÉCHEC : Problème détecté.');
+                }
+            }, 100);
+        }
+        
+        function clearBackup() {
+            if (confirm('⚠️ Êtes-vous sûr de vouloir effacer le backup localStorage ?\n\nCela permettra de tester la restauration depuis chrome.storage.sync.')) {
+                localStorage.removeItem('whisper_preferences_backup');
+                alert('✅ Backup effacé.\n\nRecharger l\'extension et rouvrir la popup pour tester la restauration.');
+                runAllTests();
+            }
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            console.log('[Test Suite] Page loaded, running tests in 1 second...');
+            setTimeout(runAllTests, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -30,7 +30,7 @@ def test_english():
 
 def test_health():
     """Test health endpoint"""
-    print("💚 Test health endpoint...")
+    print("Test health endpoint...")
     response = requests.get(f"{API_URL}/health")
     print(f"Status: {response.status_code}")
     print(f"Result: {response.json()}\n")
@@ -39,4 +39,4 @@ if __name__ == "__main__":
     test_health()
     test_french()
     test_english()
-    print("✅ Tests terminés !")
+    print("Tests terminés !")

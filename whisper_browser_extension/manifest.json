@@ -51,7 +51,13 @@
         "https://huggingface.co/*",
         "https://pi.ai/*"
       ],
-      "js": ["content-simple.js"],
+      "js": [
+        "preferences-manager.js",
+        "session-manager.js",
+        "consent-banner.js",
+        "response-interceptor.js",
+        "content-simple.js"
+      ],
       "css": ["content.css"],
       "run_at": "document_end",
       "world": "ISOLATED"

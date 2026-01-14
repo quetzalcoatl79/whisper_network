@@ -187,15 +187,18 @@ class SessionManager:
     
     def deanonymize_text(self, session_id: str, text: str) -> Optional[str]:
         """
-        De-anonymize text using session mappings
+        De-anonymize text using session mappings.
+        Handles various AI formatting: [TOKEN], ***TOKEN***, TOKEN, (TOKEN), *TOKEN*, **TOKEN**, etc.
         
         Args:
             session_id: Session identifier
-            text: Text containing anonymized tokens (***XXX_N***)
+            text: Text containing anonymized tokens in various formats
         
         Returns:
             De-anonymized text or None if session not found
         """
+        import re
+        
         reverse_mappings = self.get_reverse_mappings(session_id)
         
         if not reverse_mappings:
@@ -205,11 +208,49 @@ class SessionManager:
         result = text
         replacements = 0
         
-        # Replace all anonymized tokens with original values
-        for anonymized, original in reverse_mappings.items():
-            if anonymized in result:
-                result = result.replace(anonymized, original)
-                replacements += 1
+        # Sort by token length (longest first) to avoid partial replacements
+        # e.g., NAME_10 should be replaced before NAME_1
+        sorted_tokens = sorted(reverse_mappings.keys(), key=len, reverse=True)
+        
+        for anonymized in sorted_tokens:
+            original = reverse_mappings[anonymized]
+            
+            # Extract core token - remove brackets, stars, etc.
+            # e.g., "[NAME_1]" -> "NAME_1", "***NAME_1***" -> "NAME_1"
+            core_token = anonymized.replace('[', '').replace(']', '').replace('***', '').replace('*', '').strip()
+            
+            if not core_token:
+                continue
+            
+            escaped_core = re.escape(core_token)
+            
+            # PRECISE pattern to match token with specific formatting variations
+            # Priority: brackets first (new format), then stars (old format)
+            pattern = re.compile(
+                r'('
+                    r'\[' + escaped_core + r'\]' +             # [TOKEN] - NEW primary format
+                    r'|'
+                    r'\*{1,3}' + escaped_core + r'\*{1,3}' +   # ***TOKEN*** - OLD format
+                    r'|'
+                    r'\(' + escaped_core + r'\)' +             # (TOKEN)
+                    r'|'
+                    r'«' + escaped_core + r'»' +               # «TOKEN»
+                    r'|'
+                    r'"' + escaped_core + r'"' +               # "TOKEN"
+                    r'|'
+                    r"'" + escaped_core + r"'" +               # 'TOKEN'
+                    r'|'
+                    r'\b' + escaped_core + r'\b' +             # TOKEN alone (word boundary)
+                r')',
+                re.IGNORECASE
+            )
+            
+            # Count matches and replace
+            matches = list(pattern.finditer(result))
+            if matches:
+                result = pattern.sub(original, result)
+                replacements += len(matches)
+                logger.debug(f"Replaced '{core_token}' ({len(matches)}x) → '{original}'")
         
         logger.info(f"De-anonymized {replacements} tokens for session: {session_id}")
         return result

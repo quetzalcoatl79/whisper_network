@@ -1,16 +1,29 @@
 /**
  * Session Manager for Whisper Network Extension
  * Manages anonymization sessions per tab/conversation
+ * Stores mappings locally as fallback when Redis expires
  */
 
 class SessionManager {
     constructor() {
         this.sessions = new Map(); // tabId -> sessionId
+        this.localMappings = new Map(); // sessionId -> { token: originalValue }
         this.STORAGE_KEY = 'whisper_sessions';
+        this.MAPPINGS_KEY = 'whisper_mappings';
         this.SESSION_TTL = 2 * 60 * 60 * 1000; // 2 hours
+        this.isLoaded = false;
         
-        // Load sessions from storage on init
-        this.loadSessions();
+        // Load sessions and mappings from storage on init (non-blocking)
+        Promise.all([
+            this.loadSessions(),
+            this.loadMappings()
+        ]).then(() => {
+            this.isLoaded = true;
+            console.log('[SessionManager] Loaded sessions and mappings');
+        }).catch(err => {
+            console.warn('[SessionManager] Init load failed:', err);
+            this.isLoaded = true; // Continue anyway
+        });
     }
 
     /**
@@ -25,9 +38,129 @@ class SessionManager {
     }
 
     /**
+     * Store mapping locally for fallback deanonymization
+     */
+    storeMapping(sessionId, mapping) {
+        if (!sessionId || !mapping) return;
+        
+        // Merge with existing mappings for this session
+        const existing = this.localMappings.get(sessionId) || {};
+        const merged = { ...existing, ...mapping };
+        this.localMappings.set(sessionId, merged);
+        this.saveMappings();
+        console.log(`[SessionManager] Stored ${Object.keys(mapping).length} mappings locally for session: ${sessionId}`);
+    }
+
+    /**
+     * Get local mapping for fallback deanonymization
+     */
+    getLocalMapping(sessionId) {
+        return this.localMappings.get(sessionId) || null;
+    }
+
+    /**
+     * Deanonymize text locally using stored mappings
+     * Handles various formatting: [TOKEN] (new), ***TOKEN*** (old), TOKEN, (TOKEN), etc.
+     */
+    deanonymizeLocally(sessionId, text) {
+        const mapping = this.getLocalMapping(sessionId);
+        if (!mapping) {
+            console.log('[SessionManager] No local mapping found for session:', sessionId);
+            return null;
+        }
+
+        let result = text;
+        let replacements = 0;
+
+        console.log('[SessionManager] Available mappings:', Object.keys(mapping).join(', '));
+
+        // Trier les tokens par longueur décroissante pour éviter les remplacements partiels
+        // Ex: NAME_10 doit être traité avant NAME_1
+        const sortedTokens = Object.keys(mapping).sort((a, b) => b.length - a.length);
+
+        for (const token of sortedTokens) {
+            const original = mapping[token];
+            
+            // Extraire le cœur du token (sans les [] ou ***)
+            // "[NAME_1]" -> "NAME_1", "***NAME_1***" -> "NAME_1"
+            const coreToken = token.replace(/[\[\]]/g, '').replace(/\*\*\*/g, '').replace(/\*/g, '').trim();
+            
+            if (!coreToken) continue;
+
+            // Échapper les caractères spéciaux regex
+            const escapedCore = coreToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // Pattern PRÉCIS pour matcher le token avec différents formatages
+            // Priorité: [TOKEN] (nouveau format), puis *** (ancien format)
+            const pattern = new RegExp(
+                '(' +
+                    '\\[' + escapedCore + '\\]' +            // [TOKEN] - NOUVEAU format principal
+                    '|' +
+                    '\\*{1,3}' + escapedCore + '\\*{1,3}' +  // ***TOKEN*** - ANCIEN format
+                    '|' +
+                    '\\(' + escapedCore + '\\)' +            // (TOKEN)
+                    '|' +
+                    '«' + escapedCore + '»' +                // «TOKEN»
+                    '|' +
+                    '"' + escapedCore + '"' +                // "TOKEN"
+                    '|' +
+                    "'" + escapedCore + "'" +                // 'TOKEN'
+                    '|' +
+                    '\\b' + escapedCore + '\\b' +            // TOKEN seul (word boundary)
+                ')',
+                'gi'
+            );
+
+            const before = result;
+            result = result.replace(pattern, (match) => {
+                replacements++;
+                return original;
+            });
+            
+            if (before !== result) {
+                console.log(`[SessionManager] Replaced "${coreToken}" → "${original}"`);
+            }
+        }
+
+        console.log(`[SessionManager] Local deanonymization: ${replacements} replacements`);
+        return { text: result, replacements };
+    }
+
+    /**
+     * Load mappings from chrome.storage
+     */
+    async loadMappings() {
+        try {
+            const result = await chrome.storage.local.get(this.MAPPINGS_KEY);
+            if (result[this.MAPPINGS_KEY]) {
+                const stored = JSON.parse(result[this.MAPPINGS_KEY]);
+                this.localMappings = new Map(Object.entries(stored));
+                console.log(`[SessionManager] Loaded ${this.localMappings.size} session mappings`);
+            }
+        } catch (error) {
+            console.error('[SessionManager] Failed to load mappings:', error);
+        }
+    }
+
+    /**
+     * Save mappings to chrome.storage (fire-and-forget)
+     */
+    saveMappings() {
+        try {
+            const obj = Object.fromEntries(this.localMappings);
+            chrome.storage.local.set({
+                [this.MAPPINGS_KEY]: JSON.stringify(obj)
+            }).catch(err => console.warn('[SessionManager] Save mappings failed:', err));
+        } catch (error) {
+            console.error('[SessionManager] Failed to save mappings:', error);
+        }
+    }
+
+    /**
      * Get or create session for current tab/conversation
      */
     async getSessionId(tabId, conversationId = null) {
+        // Quick path: generate session without waiting for storage
         const key = conversationId || `tab_${tabId}`;
         
         // Check if session exists in memory
@@ -134,14 +267,14 @@ class SessionManager {
     }
 
     /**
-     * Save sessions to chrome.storage
+     * Save sessions to chrome.storage (fire-and-forget, non-blocking)
      */
-    async saveSessions() {
+    saveSessions() {
         try {
             const obj = Object.fromEntries(this.sessions);
-            await chrome.storage.local.set({
+            chrome.storage.local.set({
                 [this.STORAGE_KEY]: JSON.stringify(obj)
-            });
+            }).catch(err => console.warn('[SessionManager] Save failed:', err));
         } catch (error) {
             console.error('[SessionManager] Failed to save sessions:', error);
         }

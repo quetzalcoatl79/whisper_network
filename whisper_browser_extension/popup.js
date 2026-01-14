@@ -105,14 +105,19 @@ class WhisperPopup {
       
       // === Données personnelles ===
       anonymize_names: true,
+      anonymize_first_names: true,
+      anonymize_initials: false,
       anonymize_addresses: true,
       anonymize_phone: true,
       anonymize_email: true,
       anonymize_birth_dates: true,
+      anonymize_age: true,
       anonymize_nir: true,
       anonymize_id_cards: true,
       anonymize_passports: true,
       anonymize_ip: true,
+      anonymize_ip_public: true,
+      anonymize_ip_private: true,
       anonymize_logins: true,
       
       // === Données professionnelles ===
@@ -134,8 +139,6 @@ class WhisperPopup {
       // === Données contextuelles ===
       anonymize_locations: true,
       anonymize_geolocations: true,
-      anonymize_access_badges: true,
-      anonymize_photo_references: true,
       anonymize_biometric: true,
       anonymize_urls: true,
       
@@ -151,6 +154,19 @@ class WhisperPopup {
       autoAnonymize: false,
       autoDeanonymize: true, // NOUVEAU: dé-anonymisation automatique
       preserveMapping: true, // NOUVEAU: conserver les mappings
+      
+      // === Apparence des boutons ===
+      buttonAppearance: {
+        buttonContent: 'both', // 'both', 'icon', 'text'
+        buttonSize: 100,
+        anonymizeBgColor: '#FF6B35',
+        anonymizeTextColor: '#FFFFFF',
+        deanonymizeBgColor: '#4CAF50',
+        deanonymizeTextColor: '#FFFFFF',
+        buttonRounded: true,
+        buttonShadow: true,
+        buttonGradient: true
+      },
       
       // Statistiques de performance
       totalProcessed: 0,
@@ -234,6 +250,10 @@ class WhisperPopup {
     
     // Statistiques de performance
     this.updatePerformanceStats();
+    
+    // Apparence des boutons
+    this.updateAppearanceUI();
+    this.updateButtonPreview();
   }
 
   collectSettings() {
@@ -500,6 +520,279 @@ class WhisperPopup {
         window.configPersistence.showInstructions();
       });
     }
+    
+    // === APPARENCE DES BOUTONS ===
+    this.bindAppearanceEvents();
+  }
+  
+  // Bind des événements pour l'onglet Apparence
+  bindAppearanceEvents() {
+    // Initialiser les valeurs par défaut si non définies
+    if (!this.settings.buttonAppearance) {
+      this.settings.buttonAppearance = this.getDefaultSettings().buttonAppearance;
+    }
+    
+    // === Radio buttons pour le contenu ===
+    const contentRadios = document.querySelectorAll('input[name="buttonContent"]');
+    contentRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        this.settings.buttonAppearance.buttonContent = radio.value;
+        this.updateButtonPreview();
+        this.saveButtonAppearance();
+      });
+    });
+    
+    // === Slider de taille ===
+    const sizeSlider = document.getElementById('buttonSize');
+    const sizeValue = document.getElementById('buttonSizeValue');
+    if (sizeSlider) {
+      sizeSlider.addEventListener('input', () => {
+        const value = sizeSlider.value;
+        if (sizeValue) sizeValue.textContent = `${value}%`;
+        this.settings.buttonAppearance.buttonSize = parseInt(value);
+        this.updateButtonPreview();
+        this.updateSizePresets(value);
+      });
+      
+      sizeSlider.addEventListener('change', () => {
+        this.saveButtonAppearance();
+      });
+    }
+    
+    // === Presets de taille ===
+    const sizePresets = document.querySelectorAll('.preset-btn[data-size]');
+    sizePresets.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const size = btn.dataset.size;
+        if (sizeSlider) {
+          sizeSlider.value = size;
+          if (sizeValue) sizeValue.textContent = `${size}%`;
+        }
+        this.settings.buttonAppearance.buttonSize = parseInt(size);
+        this.updateButtonPreview();
+        this.updateSizePresets(size);
+        this.saveButtonAppearance();
+      });
+    });
+    
+    // === Color pickers ===
+    this.bindColorInput('anonymizeBgColor', 'anonymizeBgColor');
+    this.bindColorInput('anonymizeTextColor', 'anonymizeTextColor');
+    this.bindColorInput('deanonymizeBgColor', 'deanonymizeBgColor');
+    this.bindColorInput('deanonymizeTextColor', 'deanonymizeTextColor');
+    
+    // === Checkboxes de style ===
+    const styleCheckboxes = ['buttonRounded', 'buttonShadow', 'buttonGradient'];
+    styleCheckboxes.forEach(id => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) {
+        checkbox.addEventListener('change', () => {
+          this.settings.buttonAppearance[id] = checkbox.checked;
+          this.updateButtonPreview();
+          this.saveButtonAppearance();
+        });
+      }
+    });
+    
+    // === Bouton reset apparence ===
+    const resetAppearanceBtn = document.getElementById('resetAppearanceBtn');
+    if (resetAppearanceBtn) {
+      resetAppearanceBtn.addEventListener('click', () => {
+        if (confirm('Voulez-vous réinitialiser l\'apparence des boutons ?')) {
+          this.resetAppearanceToDefaults();
+        }
+      });
+    }
+  }
+  
+  // Bind un color picker avec son input texte associé
+  bindColorInput(settingKey, inputId) {
+    const colorInput = document.getElementById(inputId);
+    const textInput = document.getElementById(`${inputId}Text`);
+    
+    if (colorInput) {
+      colorInput.addEventListener('input', () => {
+        const value = colorInput.value;
+        if (textInput) textInput.value = value.toUpperCase();
+        this.settings.buttonAppearance[settingKey] = value;
+        this.updateButtonPreview();
+      });
+      
+      colorInput.addEventListener('change', () => {
+        this.saveButtonAppearance();
+      });
+    }
+    
+    if (textInput) {
+      textInput.addEventListener('input', () => {
+        let value = textInput.value;
+        // Valider le format hex
+        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+          if (colorInput) colorInput.value = value;
+          this.settings.buttonAppearance[settingKey] = value;
+          this.updateButtonPreview();
+        }
+      });
+      
+      textInput.addEventListener('change', () => {
+        this.saveButtonAppearance();
+      });
+    }
+  }
+  
+  // Mettre à jour les presets de taille actifs
+  updateSizePresets(value) {
+    const presets = document.querySelectorAll('.preset-btn[data-size]');
+    presets.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.size === String(value));
+    });
+  }
+  
+  // Mettre à jour l'aperçu des boutons
+  updateButtonPreview() {
+    const app = this.settings.buttonAppearance;
+    if (!app) return;
+    
+    const previewAnonymize = document.getElementById('previewAnonymizeBtn');
+    const previewDeanonymize = document.getElementById('previewDeanonymizeBtn');
+    
+    if (previewAnonymize) {
+      this.applyPreviewStyle(previewAnonymize, 'anonymize', app);
+    }
+    
+    if (previewDeanonymize) {
+      this.applyPreviewStyle(previewDeanonymize, 'deanonymize', app);
+    }
+  }
+  
+  // Appliquer le style à un bouton de preview
+  applyPreviewStyle(btn, type, app) {
+    const isAnonymize = type === 'anonymize';
+    const bgColor = isAnonymize ? app.anonymizeBgColor : app.deanonymizeBgColor;
+    const textColor = isAnonymize ? app.anonymizeTextColor : app.deanonymizeTextColor;
+    const icon = isAnonymize ? '🔒' : '🔓';
+    const text = isAnonymize ? 'ANONYMISER' : 'DÉ-ANONYMISER';
+    const size = (app.buttonSize || 100) / 100;
+    
+    // Calculer une couleur plus claire pour le dégradé
+    const lighterColor = this.lightenColor(bgColor, 20);
+    
+    // Background avec ou sans dégradé
+    const background = app.buttonGradient 
+      ? `linear-gradient(135deg, ${bgColor} 0%, ${lighterColor} 100%)`
+      : bgColor;
+    
+    // Border radius
+    const borderRadius = app.buttonRounded ? '25px' : '8px';
+    
+    // Box shadow
+    const shadow = app.buttonShadow 
+      ? `0 4px 15px ${this.hexToRgba(bgColor, 0.4)}`
+      : 'none';
+    
+    btn.style.background = background;
+    btn.style.color = textColor;
+    btn.style.borderRadius = borderRadius;
+    btn.style.boxShadow = shadow;
+    btn.style.padding = `${12 * size}px ${20 * size}px`;
+    btn.style.fontSize = `${14 * size}px`;
+    
+    // Contenu
+    const iconEl = btn.querySelector('.preview-icon');
+    const textEl = btn.querySelector('.preview-text');
+    
+    if (iconEl) {
+      iconEl.style.display = app.buttonContent === 'text' ? 'none' : 'inline';
+      iconEl.style.fontSize = `${18 * size}px`;
+      iconEl.textContent = icon;
+    }
+    
+    if (textEl) {
+      textEl.style.display = app.buttonContent === 'icon' ? 'none' : 'inline';
+      textEl.textContent = text;
+    }
+  }
+  
+  // Utilitaire: éclaircir une couleur hex
+  lightenColor(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = Math.min(255, (num >> 16) + amt);
+    const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+    const B = Math.min(255, (num & 0x0000FF) + amt);
+    return `#${(0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)}`;
+  }
+  
+  // Utilitaire: hex vers rgba
+  hexToRgba(hex, alpha) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const R = (num >> 16) & 255;
+    const G = (num >> 8) & 255;
+    const B = num & 255;
+    return `rgba(${R}, ${G}, ${B}, ${alpha})`;
+  }
+  
+  // Sauvegarder les préférences d'apparence
+  async saveButtonAppearance() {
+    try {
+      await chrome.storage.sync.set({ buttonAppearance: this.settings.buttonAppearance });
+      console.log('🎨 Apparence des boutons sauvegardée:', this.settings.buttonAppearance);
+    } catch (e) {
+      console.error('❌ Erreur sauvegarde apparence:', e);
+    }
+  }
+  
+  // Réinitialiser l'apparence par défaut
+  async resetAppearanceToDefaults() {
+    const defaults = this.getDefaultSettings().buttonAppearance;
+    this.settings.buttonAppearance = { ...defaults };
+    
+    // Mettre à jour l'UI
+    this.updateAppearanceUI();
+    this.updateButtonPreview();
+    
+    // Sauvegarder
+    await this.saveButtonAppearance();
+    this.showNotification('✅ Apparence réinitialisée', 'success');
+  }
+  
+  // Mettre à jour l'UI de l'onglet Apparence avec les valeurs actuelles
+  updateAppearanceUI() {
+    const app = this.settings.buttonAppearance;
+    if (!app) return;
+    
+    // Radio buttons
+    const contentRadio = document.querySelector(`input[name="buttonContent"][value="${app.buttonContent}"]`);
+    if (contentRadio) contentRadio.checked = true;
+    
+    // Slider de taille
+    const sizeSlider = document.getElementById('buttonSize');
+    const sizeValue = document.getElementById('buttonSizeValue');
+    if (sizeSlider) sizeSlider.value = app.buttonSize;
+    if (sizeValue) sizeValue.textContent = `${app.buttonSize}%`;
+    this.updateSizePresets(app.buttonSize);
+    
+    // Color inputs
+    this.setColorInput('anonymizeBgColor', app.anonymizeBgColor);
+    this.setColorInput('anonymizeTextColor', app.anonymizeTextColor);
+    this.setColorInput('deanonymizeBgColor', app.deanonymizeBgColor);
+    this.setColorInput('deanonymizeTextColor', app.deanonymizeTextColor);
+    
+    // Checkboxes
+    const rounded = document.getElementById('buttonRounded');
+    const shadow = document.getElementById('buttonShadow');
+    const gradient = document.getElementById('buttonGradient');
+    if (rounded) rounded.checked = app.buttonRounded;
+    if (shadow) shadow.checked = app.buttonShadow;
+    if (gradient) gradient.checked = app.buttonGradient;
+  }
+  
+  // Utilitaire pour définir un color input
+  setColorInput(id, value) {
+    const colorInput = document.getElementById(id);
+    const textInput = document.getElementById(`${id}Text`);
+    if (colorInput) colorInput.value = value;
+    if (textInput) textInput.value = value.toUpperCase();
   }
 
   async checkApiStatus() {

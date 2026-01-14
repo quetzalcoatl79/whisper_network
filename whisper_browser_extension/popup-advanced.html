@@ -21,18 +21,18 @@
     </div>
 
     <!-- Bandeau de confidentialité (première visite) -->
-    <div id="privacyBanner" style="display: none; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #2196F3; padding: 15px; margin: 15px 0; border-radius: 8px; position: relative; animation: slideDown 0.3s ease-out;">
-      <button id="closeBanner" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 20px; cursor: pointer; color: #1976d2; opacity: 0.7; transition: opacity 0.2s;" title="Fermer définitivement">×</button>
-      <div style="display: flex; align-items: start; gap: 12px;">
-        <span style="font-size: 28px; flex-shrink: 0;">🍪</span>
+    <div id="privacyBanner" class="privacy-banner" style="display: none;">
+      <button id="closeBanner" class="close-banner" title="Fermer définitivement">×</button>
+      <div class="privacy-content">
+        <span class="privacy-icon">🍪</span>
         <div>
-          <h3 style="margin: 0 0 8px 0; color: #1565c0; font-size: 15px; font-weight: 600;">
+          <h3 class="privacy-title">
             📌 Information sur le stockage de vos préférences
           </h3>
-          <p style="margin: 0 0 10px 0; color: #0d47a1; font-size: 13px; line-height: 1.6;">
+          <p class="privacy-text">
             Cette extension synchronise vos préférences via <strong>localStorage</strong>, <strong>chrome.storage.sync</strong> et <strong>serveur cloud sécurisé</strong>.
           </p>
-          <ul style="margin: 0 0 10px 0; padding-left: 20px; color: #0d47a1; font-size: 12px; line-height: 1.8;">
+          <ul class="privacy-list">
             <li>✅ <strong>UUID anonyme</strong> généré localement (aucun compte requis)</li>
             <li>✅ <strong>Stockage cloud chiffré</strong> pour synchronisation multi-appareils</li>
             <li>🔒 <strong>Mappings d'anonymisation en cache local uniquement</strong> (jamais envoyés)</li>
@@ -40,7 +40,7 @@
             <li>✅ <strong>Export/Import manuel</strong> disponible ci-dessous</li>
             <li>⚠️ <strong>Données confidentielles</strong> : jamais stockées en base</li>
           </ul>
-          <p style="margin: 0; color: #1565c0; font-size: 12px; font-style: italic;">
+          <p class="privacy-footer">
             🔐 En validant, un UUID anonyme sera généré et vos préférences seront synchronisées de manière sécurisée.
           </p>
         </div>
@@ -72,6 +72,7 @@
       <button class="tab-btn" data-tab="professional">💼 Professionnelles</button>
       <button class="tab-btn" data-tab="sensitive">🏥 Sensibles</button>
       <button class="tab-btn" data-tab="contextual">🌍 Contextuelles</button>
+      <button class="tab-btn" data-tab="appearance">🎨 Apparence</button>
     </div>
 
     <!-- Données personnelles -->
@@ -83,8 +84,17 @@
             <input type="checkbox" id="anonymize_names">
             <span class="checkmark"></span>
             <div>
-              <span class="title">Noms et prénoms</span>
-              <span class="description">Jean Dupont → ***NAME***</span>
+              <span class="title">Noms de famille</span>
+              <span class="description">Dupont → [NAME_1]</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_first_names">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">Prénoms</span>
+              <span class="description">Jean → [PRENOM_1]</span>
             </div>
           </label>
 
@@ -93,7 +103,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Adresses postales</span>
-              <span class="description">123 rue de la Paix → ***ADDRESS***</span>
+              <span class="description">123 rue de la Paix → [ADDRESS_1]</span>
             </div>
           </label>
 
@@ -102,7 +112,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Numéros de téléphone</span>
-              <span class="description">01.23.45.67.89 → ***PHONE***</span>
+              <span class="description">01.23.45.67.89 → [PHONE_1]</span>
             </div>
           </label>
 
@@ -111,16 +121,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Emails</span>
-              <span class="description">user@domain.com → ***EMAIL***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_birth_dates">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Dates de naissance / Âge</span>
-              <span class="description">15/03/1985, 38 ans → ***DATE_NAISSANCE***</span>
+              <span class="description">user@domain.com → [EMAIL_1]</span>
             </div>
           </label>
 
@@ -129,25 +130,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">NIR / Sécurité sociale</span>
-              <span class="description">1 23 45 67 890 123 → ***NIR***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_id_cards">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Cartes d'identité</span>
-              <span class="description">N° CNI → ***CNI***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_passports">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Passeports</span>
-              <span class="description">N° passeport → ***PASSEPORT***</span>
+              <span class="description">1 23 45 67 890 123 → [NIR_1]</span>
             </div>
           </label>
 
@@ -155,17 +138,26 @@
             <input type="checkbox" id="anonymize_ip">
             <span class="checkmark"></span>
             <div>
-              <span class="title">Adresses IP</span>
-              <span class="description">192.168.1.1 → ***IP***</span>
+              <span class="title">Adresses IP (toutes)</span>
+              <span class="description">192.168.1.1 → [IP_1]</span>
             </div>
           </label>
 
           <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_logins">
+            <input type="checkbox" id="anonymize_ip_public">
             <span class="checkmark"></span>
             <div>
-              <span class="title">Identifiants numériques</span>
-              <span class="description">Login, cookies → ***LOGIN***</span>
+              <span class="title">IP publiques uniquement</span>
+              <span class="description">8.8.8.8 → [IP_PUBLIQUE_1]</span>
+            </div>
+          </label>
+
+          <label class="checkbox-item">
+            <input type="checkbox" id="anonymize_ip_private">
+            <span class="checkmark"></span>
+            <div>
+              <span class="title">IP privées uniquement</span>
+              <span class="description">192.168.x.x, 10.x.x.x → [IP_PRIVEE_1]</span>
             </div>
           </label>
         </div>
@@ -182,7 +174,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Matricules employés</span>
-              <span class="description">EMP12345 → ***MATRICULE***</span>
+              <span class="description">EMP12345 → [MATRICULE_1]</span>
             </div>
           </label>
 
@@ -191,7 +183,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Évaluations de performance</span>
-              <span class="description">Notes RH → ***EVALUATION***</span>
+              <span class="description">Notes RH → [EVALUATION_1]</span>
             </div>
           </label>
 
@@ -200,7 +192,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Données de paie</span>
-              <span class="description">3500€ brut → ***SALAIRE***</span>
+              <span class="description">3500€ brut → [SALAIRE_1]</span>
             </div>
           </label>
 
@@ -209,16 +201,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">Planning individuels</span>
-              <span class="description">Horaires personnels → ***PLANNING***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_internal_comm">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Communications internes</span>
-              <span class="description">Emails, messages → ***COMM_INTERNE***</span>
+              <span class="description">Horaires personnels → [PLANNING_1]</span>
             </div>
           </label>
         </div>
@@ -228,32 +211,14 @@
     <!-- Données sensibles -->
     <div id="sensitive" class="tab-content">
       <div class="section">
-        <h3>🏥 Données sensibles spécifiques</h3>
+        <h3>🏥 Données financières</h3>
         <div class="checkbox-grid">
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_medical_data">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Données de santé</span>
-              <span class="description">Diagnostics, traitements → ***MEDICAL***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_bank_accounts">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Comptes bancaires</span>
-              <span class="description">RIB, relevés → ***COMPTE_BANCAIRE***</span>
-            </div>
-          </label>
-
           <label class="checkbox-item">
             <input type="checkbox" id="anonymize_credit_cards">
             <span class="checkmark"></span>
             <div>
               <span class="title">Cartes de crédit</span>
-              <span class="description">4532 1234 5678 9012 → ***CARTE***</span>
+              <span class="description">4532 1234 5678 9012 → [CARTE_1]</span>
             </div>
           </label>
 
@@ -262,34 +227,7 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">IBAN</span>
-              <span class="description">FR76 1234 5678 → ***IBAN***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_transactions">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Transactions</span>
-              <span class="description">Virements, dettes → ***TRANSACTION***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_grades">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Notes scolaires</span>
-              <span class="description">Bulletins, 15/20 → ***NOTE***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_legal_cases">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Dossiers juridiques</span>
-              <span class="description">Litiges, sanctions → ***DOSSIER_JURIDIQUE***</span>
+              <span class="description">FR76 1234 5678 → [IBAN_1]</span>
             </div>
           </label>
         </div>
@@ -305,44 +243,8 @@
             <input type="checkbox" id="anonymize_locations">
             <span class="checkmark"></span>
             <div>
-              <span class="title">Localisation précise</span>
-              <span class="description">Lieux identifiants → ***LIEU***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_geolocations">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Géolocalisation</span>
-              <span class="description">48.8566° N → ***COORDONNEES***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_access_badges">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Badges d'accès</span>
-              <span class="description">Identifiants d'accès → ***BADGE***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_photo_references">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Références photos</span>
-              <span class="description">Photos identifiables → ***PHOTO***</span>
-            </div>
-          </label>
-
-          <label class="checkbox-item">
-            <input type="checkbox" id="anonymize_biometric">
-            <span class="checkmark"></span>
-            <div>
-              <span class="title">Données biométriques</span>
-              <span class="description">Empreintes, reconnaissance → ***BIOMETRIE***</span>
+              <span class="title">Lieux / Localisation</span>
+              <span class="description">Paris, France → [LIEU_1]</span>
             </div>
           </label>
 
@@ -351,9 +253,148 @@
             <span class="checkmark"></span>
             <div>
               <span class="title">URLs</span>
-              <span class="description">https://site.com → ***URL***</span>
+              <span class="description">https://site.com/user → [URL_1]</span>
             </div>
           </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Personnalisation Apparence -->
+    <div id="appearance" class="tab-content">
+      <div class="section">
+        <h3>🎨 Personnalisation des boutons</h3>
+        <p class="section-description">Personnalisez l'apparence des boutons d'anonymisation flottants.</p>
+        
+        <!-- Aperçu en temps réel -->
+        <div class="preview-container">
+          <h4>Aperçu</h4>
+          <div class="buttons-preview">
+            <button id="previewAnonymizeBtn" class="preview-btn preview-anonymize">
+              <span class="preview-icon">🔒</span>
+              <span class="preview-text">ANONYMISER</span>
+            </button>
+            <button id="previewDeanonymizeBtn" class="preview-btn preview-deanonymize">
+              <span class="preview-icon">🔓</span>
+              <span class="preview-text">DÉ-ANONYMISER</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Options de contenu -->
+        <div class="appearance-group">
+          <h4>Contenu des boutons</h4>
+          <div class="radio-group-inline">
+            <label class="radio-inline">
+              <input type="radio" name="buttonContent" value="both" id="contentBoth" checked>
+              <span class="radio-mark"></span>
+              <span>Icône + Texte</span>
+            </label>
+            <label class="radio-inline">
+              <input type="radio" name="buttonContent" value="icon" id="contentIcon">
+              <span class="radio-mark"></span>
+              <span>Icône seule</span>
+            </label>
+            <label class="radio-inline">
+              <input type="radio" name="buttonContent" value="text" id="contentText">
+              <span class="radio-mark"></span>
+              <span>Texte seul</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Taille des boutons -->
+        <div class="appearance-group">
+          <h4>Taille</h4>
+          <div class="slider-container">
+            <input type="range" id="buttonSize" min="50" max="150" value="100" class="slider-input">
+            <span id="buttonSizeValue" class="slider-value">100%</span>
+          </div>
+          <div class="size-presets">
+            <button class="preset-btn" data-size="70">S</button>
+            <button class="preset-btn active" data-size="100">M</button>
+            <button class="preset-btn" data-size="130">L</button>
+          </div>
+        </div>
+
+        <!-- Couleurs bouton Anonymiser -->
+        <div class="appearance-group">
+          <h4>🔒 Bouton Anonymiser</h4>
+          <div class="color-grid">
+            <div class="color-item">
+              <label>Couleur de fond</label>
+              <div class="color-input-group">
+                <input type="color" id="anonymizeBgColor" value="#FF6B35">
+                <input type="text" id="anonymizeBgColorText" value="#FF6B35" class="color-text">
+              </div>
+            </div>
+            <div class="color-item">
+              <label>Couleur du texte</label>
+              <div class="color-input-group">
+                <input type="color" id="anonymizeTextColor" value="#FFFFFF">
+                <input type="text" id="anonymizeTextColorText" value="#FFFFFF" class="color-text">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Couleurs bouton Dé-anonymiser -->
+        <div class="appearance-group">
+          <h4>🔓 Bouton Dé-anonymiser</h4>
+          <div class="color-grid">
+            <div class="color-item">
+              <label>Couleur de fond</label>
+              <div class="color-input-group">
+                <input type="color" id="deanonymizeBgColor" value="#4CAF50">
+                <input type="text" id="deanonymizeBgColorText" value="#4CAF50" class="color-text">
+              </div>
+            </div>
+            <div class="color-item">
+              <label>Couleur du texte</label>
+              <div class="color-input-group">
+                <input type="color" id="deanonymizeTextColor" value="#FFFFFF">
+                <input type="text" id="deanonymizeTextColorText" value="#FFFFFF" class="color-text">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Style du bouton -->
+        <div class="appearance-group">
+          <h4>Style</h4>
+          <div class="checkbox-grid">
+            <label class="checkbox-item">
+              <input type="checkbox" id="buttonRounded" checked>
+              <span class="checkmark"></span>
+              <div>
+                <span class="title">Coins arrondis</span>
+                <span class="description">Boutons en forme de pilule</span>
+              </div>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="buttonShadow" checked>
+              <span class="checkmark"></span>
+              <div>
+                <span class="title">Ombre portée</span>
+                <span class="description">Effet d'élévation</span>
+              </div>
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="buttonGradient" checked>
+              <span class="checkmark"></span>
+              <div>
+                <span class="title">Dégradé</span>
+                <span class="description">Fond en dégradé</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Boutons de réinitialisation -->
+        <div class="button-group" style="margin-top: 15px;">
+          <button id="resetAppearanceBtn" class="btn-secondary">
+            🔄 Réinitialiser par défaut
+          </button>
         </div>
       </div>
     </div>

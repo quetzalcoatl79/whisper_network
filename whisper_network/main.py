@@ -120,7 +120,8 @@ def get_default_anonymization_settings():
         "anonymize_email": True,
         "anonymize_phone": True,
         "anonymize_names": True,
-        "anonymize_address": True,
+        "anonymize_addresses": True,
+        "anonymize_address": True,  # backward compatibility with older clients
         "anonymize_urls": True,
         "anonymize_credit_cards": True,
         "anonymize_iban": True,

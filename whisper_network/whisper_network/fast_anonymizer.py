@@ -127,13 +127,14 @@ class FastAnonymizer:
     def _get_consistent_token(self, category: str, original: str, base_token: str) -> str:
         """
         Génère un token cohérent et lisible basé sur un compteur par catégorie.
+        Format: [TOKEN_N] pour meilleure compatibilité avec les IA
         
         Exemples:
-        - IP 192.168.1.1 → IP_1
-        - IP 192.168.1.1 (réutilisé) → IP_1
-        - IP 192.168.1.200 → IP_2
-        - Email test@example.com → EMAIL_1
-        - Nom Dupont → NOM_1
+        - IP 192.168.1.1 → [IP_1]
+        - IP 192.168.1.1 (réutilisé) → [IP_1]
+        - IP 192.168.1.200 → [IP_2]
+        - Email test@example.com → [EMAIL_1]
+        - Nom Dupont → [NOM_1]
         """
         if category not in self.consistency_map:
             self.consistency_map[category] = {}
@@ -141,7 +142,7 @@ class FastAnonymizer:
         if original not in self.consistency_map[category]:
             # Compteur simple pour chaque catégorie
             counter = len(self.consistency_map[category]) + 1
-            self.consistency_map[category][original] = f"{base_token}_{counter}"
+            self.consistency_map[category][original] = f"[{base_token}_{counter}]"
         
         return self.consistency_map[category][original]
     

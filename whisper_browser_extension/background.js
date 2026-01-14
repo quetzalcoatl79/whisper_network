@@ -123,6 +123,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
     
+    // Handle text deanonymization
+    if (message.action === 'deanonymize') {
+        deanonymizeText(
+            message.text,
+            message.session_id
+        ).then(result => {
+            sendResponse(result);
+        }).catch(error => {
+            console.error('Deanonymization failed:', error);
+            sendResponse({success: false, error: error.message});
+        });
+        return true;
+    }
+    
     // Legacy support
     if (message.type === 'GET_SETTINGS') {
         chrome.storage.sync.get({
@@ -175,43 +189,71 @@ async function testApiConnection() {
 
 // Text anonymization function
 async function anonymizeText(text, customSettings, sessionId = null, preserveMapping = true) {
+    // Déclarer finalSettings en dehors du try pour qu'il soit accessible dans le catch
+    let finalSettings = { apiUrl: 'http://localhost:8001' };
+    
     try {
         const settings = await new Promise((resolve) => {
             chrome.storage.sync.get({
                 apiUrl: 'http://localhost:8001',
                 apiKey: '',
                 processingMode: 'fast',
+                // Données personnelles
                 anonymize_names: true,
-                anonymize_email: true,
+                anonymize_first_names: true,
+                anonymize_initials: false,
+                anonymize_addresses: true,
+                anonymize_address: true, // alias backward compatible
                 anonymize_phone: true,
-                anonymize_address: true,
+                anonymize_email: true,
+                anonymize_birth_dates: true,
+                anonymize_age: true,
                 anonymize_nir: true,
-                anonymize_iban: true,
-                anonymize_credit_cards: true,
+                anonymize_id_cards: true,
+                anonymize_passports: true,
                 anonymize_ip: true,
+                anonymize_ip_public: true,
+                anonymize_ip_private: true,
+                anonymize_logins: true,
+                // Données professionnelles
+                anonymize_employee_ids: true,
+                anonymize_performance_data: true,
+                anonymize_salary_data: true,
+                anonymize_schedules: true,
+                anonymize_internal_comm: true,
+                // Données sensibles
+                anonymize_medical_data: true,
+                anonymize_bank_accounts: true,
+                anonymize_credit_cards: true,
+                anonymize_iban: true,
+                anonymize_transactions: true,
+                anonymize_grades: true,
+                anonymize_legal_cases: true,
+                // Données contextuelles
+                anonymize_locations: true,
+                anonymize_geolocations: true,
+                anonymize_biometric: true,
                 anonymize_urls: true
             }, resolve);
         });
         
         // Fusionner les paramètres par défaut avec les paramètres personnalisés
-        const finalSettings = { ...settings, ...customSettings };
+        finalSettings = { ...settings, ...customSettings };
         
         // Choisir l'endpoint basé sur le mode de traitement
-        const endpoint = finalSettings.processingMode === 'fast' ? '/anonymize/fast' : '/anonymize';
+        const endpoint = '/anonymize'; // Force full anonymization with CamemBERT
+        
+        // Extraire TOUS les paramètres d'anonymisation dynamiquement
+        const anonymizationSettings = {};
+        for (const key in finalSettings) {
+            if (key.startsWith('anonymize_')) {
+                anonymizationSettings[key] = finalSettings[key];
+            }
+        }
         
         const requestData = {
             text: text,
-            settings: {
-                anonymize_names: finalSettings.anonymize_names,
-                anonymize_email: finalSettings.anonymize_email,
-                anonymize_phone: finalSettings.anonymize_phone,
-                anonymize_address: finalSettings.anonymize_address,
-                anonymize_nir: finalSettings.anonymize_nir,
-                anonymize_iban: finalSettings.anonymize_iban,
-                anonymize_credit_cards: finalSettings.anonymize_credit_cards,
-                anonymize_ip: finalSettings.anonymize_ip,
-                anonymize_urls: finalSettings.anonymize_urls
-            },
+            settings: anonymizationSettings,
             // Add session management fields
             session_id: sessionId,
             preserve_mapping: preserveMapping,
@@ -228,21 +270,36 @@ async function anonymizeText(text, customSettings, sessionId = null, preserveMap
             headers['X-API-Key'] = finalSettings.apiKey;
         }
         
-        const response = await fetch(`${finalSettings.apiUrl}${endpoint}`, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(requestData)
-        });
+        // Ajouter un timeout de 15 secondes pour éviter les blocages
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         
-        if (response.ok) {
-            const data = await response.json();
-            return {
-                success: true,
-                ...data
-            };
-        } else {
-            const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        try {
+            const response = await fetch(`${finalSettings.apiUrl}${endpoint}`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestData),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    success: true,
+                    ...data
+                };
+            } else {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Timeout: le serveur ne répond pas après 15 secondes');
+            }
+            throw fetchError;
         }
     } catch (error) {
         console.error('Anonymization failed:', error);
@@ -255,6 +312,92 @@ async function anonymizeText(text, customSettings, sessionId = null, preserveMap
             userMessage = 'Erreur réseau. Vérifiez votre connexion.';
         } else if (error.message.includes('CORS')) {
             userMessage = 'Erreur CORS. Vérifiez la configuration du serveur.';
+        }
+        
+        return {
+            success: false,
+            error: userMessage
+        };
+    }
+}
+
+// Text deanonymization function
+async function deanonymizeText(text, sessionId) {
+    let apiUrl = 'http://localhost:8001';
+    
+    try {
+        const settings = await new Promise((resolve) => {
+            chrome.storage.sync.get({
+                apiUrl: 'http://localhost:8001',
+                apiKey: ''
+            }, resolve);
+        });
+        
+        apiUrl = settings.apiUrl;
+        
+        if (!sessionId) {
+            return {
+                success: false,
+                error: 'Aucun session_id fourni. Anonymisez d\'abord un texte.'
+            };
+        }
+        
+        const requestData = {
+            text: text,
+            session_id: sessionId
+        };
+        
+        // Préparer les headers
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        // Ajouter l'API Key si configurée
+        if (settings.apiKey && settings.apiKey.trim() !== '') {
+            headers['X-API-Key'] = settings.apiKey;
+        }
+        
+        // Ajouter un timeout de 15 secondes
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        
+        try {
+            const response = await fetch(`${apiUrl}/deanonymize`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestData),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    success: true,
+                    deanonymized_text: data.deanonymized_text || data.text,
+                    replacements_count: data.replacements_count || 0,
+                    ...data
+                };
+            } else {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Timeout: le serveur ne répond pas après 15 secondes');
+            }
+            throw fetchError;
+        }
+    } catch (error) {
+        console.error('Deanonymization failed:', error);
+        
+        let userMessage = error.message;
+        if (error.message.includes('Failed to fetch')) {
+            userMessage = `Impossible de contacter l'API (${apiUrl}). Vérifiez que le serveur est démarré.`;
+        } else if (error.message.includes('404')) {
+            userMessage = 'Session expirée ou introuvable. Ré-anonymisez le texte.';
         }
         
         return {

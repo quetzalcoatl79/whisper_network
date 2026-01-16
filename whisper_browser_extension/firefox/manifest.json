@@ -78,13 +78,8 @@
   },
   
   "web_accessible_resources": [
-    "whisper-ui.js",
-    "whisper-ui.css",
-    "preferences-manager.js",
-    "session-manager.js",
-    "consent-banner.js",
-    "response-interceptor.js",
-    "content-simple.js"
+    "*.js",
+    "*.css"
   ],
   
   "browser_specific_settings": {

@@ -75,10 +75,11 @@ class FastAnonymizer:
             r'\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3[0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\b'
         )
         
-        # IBAN français (27 caractères : FR + 2 chiffres clé + 23 chiffres)
-        # Accepte espaces/tirets optionnels entre groupes
+        # IBAN (international, flexible) - FR76 3000 4012 3400 0100 0946 042
+        # Format: 2 lettres pays + 2 chiffres clé + 10-30 caractères alphanumériques
+        # Accepte espaces/tirets entre groupes de 4 chiffres
         self.pattern_cache['iban'] = re.compile(
-            r'\b[A-Z]{2}[\s-]?[0-9]{2}(?:[\s-]?[0-9]){23}\b',
+            r'\b[A-Z]{2}[\s-]?[0-9]{2}(?:[\s-]?[A-Z0-9]{4}){3,7}(?:[\s-]?[A-Z0-9]{1,4})?\b',
             re.IGNORECASE
         )
         
@@ -123,17 +124,41 @@ class FastAnonymizer:
             r'\b(?:horaire|planning|shift|poste)\s*:?\s*(?:\d{1,2}[h:]\d{2}[-–]\d{1,2}[h:]\d{2}|matin|après-midi|nuit|jour)\b',
             re.IGNORECASE
         )
+        
+        # ========================================
+        # 🆕 ORGANISATIONS / ENTREPRISES
+        # ========================================
+        
+        # Organisations avec suffixes légaux (SA, SAS, SARL, etc.)
+        # Dupont SA, Acme Corp, NXO SAS, etc.
+        self.pattern_cache['organization'] = re.compile(
+            r'\b[A-Z][A-Za-z0-9\-\']+(?:\s+(?:&|et|and)\s+[A-Z][A-Za-z0-9\-\']+)*\s+(?:SA|SAS|SARL|EURL|SCI|GIE|SASU|Inc\.?|Corp\.?|LLC|Ltd\.?|GmbH|AG|BV|NV|PLC|Pty|Co\.?)\b',
+            re.IGNORECASE
+        )
+        
+        # Pattern pour "by/par/chez + ORG" : NANO by NXO, développé par Acme
+        self.pattern_cache['org_context'] = re.compile(
+            r'\b(?:by|par|chez|@|de chez)\s+([A-Z][A-Z0-9]{1,10})\b'
+        )
+        
+        # Acronymes d'entreprises précédés de mots-clés
+        # client NXO, société ABC, entreprise XYZ
+        self.pattern_cache['org_keyword'] = re.compile(
+            r'\b(?:client|société|entreprise|groupe|filiale|partenaire|fournisseur|prestataire)\s+([A-Z][A-Z0-9\-]{1,15})\b',
+            re.IGNORECASE
+        )
     
     def _get_consistent_token(self, category: str, original: str, base_token: str) -> str:
         """
         Génère un token cohérent et lisible basé sur un compteur par catégorie.
+        Format: [TOKEN_N] pour meilleure compatibilité avec les IA
         
         Exemples:
-        - IP 192.168.1.1 → IP_1
-        - IP 192.168.1.1 (réutilisé) → IP_1
-        - IP 192.168.1.200 → IP_2
-        - Email test@example.com → EMAIL_1
-        - Nom Dupont → NOM_1
+        - IP 192.168.1.1 → [IP_1]
+        - IP 192.168.1.1 (réutilisé) → [IP_1]
+        - IP 192.168.1.200 → [IP_2]
+        - Email test@example.com → [EMAIL_1]
+        - Nom Dupont → [NOM_1]
         """
         if category not in self.consistency_map:
             self.consistency_map[category] = {}
@@ -141,7 +166,7 @@ class FastAnonymizer:
         if original not in self.consistency_map[category]:
             # Compteur simple pour chaque catégorie
             counter = len(self.consistency_map[category]) + 1
-            self.consistency_map[category][original] = f"{base_token}_{counter}"
+            self.consistency_map[category][original] = f"[{base_token}_{counter}]"
         
         return self.consistency_map[category][original]
     
@@ -156,20 +181,23 @@ class FastAnonymizer:
             total_replacements = 0
             mapping_summary = {}
             
-            # Anonymisation par ordre de priorité (plus rapide en premier)
+            # Anonymisation par ordre de priorité
+            # ⚠️ IBAN et CB AVANT phone pour éviter faux positifs
             anonymization_steps = [
                 ('anonymize_email', 'email', 'EMAIL'),
-                ('anonymize_phone', 'phone', 'TEL'),  
+                ('anonymize_iban', 'iban', 'IBAN'),  # IBAN avant phone !
+                ('anonymize_credit_cards', 'credit_card', 'CB'),  # CB avant phone !
                 ('anonymize_ip', 'ip', 'IP'),
-                ('anonymize_credit_cards', 'credit_card', 'CB'),
-                ('anonymize_iban', 'iban', 'IBAN'),
+                ('anonymize_phone', 'phone', 'TEL'),
                 ('anonymize_nir', 'nir', 'NIR'),
                 ('anonymize_urls', 'url', 'URL'),
                 # 🆕 Patterns RH/Entreprise
                 ('anonymize_matricule', 'matricule', 'MATRICULE'),
                 ('anonymize_salaire', 'salaire', 'SALAIRE'),
                 ('anonymize_evaluation', 'evaluation', 'EVALUATION'),
-                ('anonymize_planning', 'planning', 'PLANNING')
+                ('anonymize_planning', 'planning', 'PLANNING'),
+                # 🆕 Organisations
+                ('anonymize_organizations', 'organization', 'ORG'),
             ]
             
             for setting_key, pattern_key, token_base in anonymization_steps:
@@ -191,6 +219,30 @@ class FastAnonymizer:
                             
                             if category_mappings:
                                 mapping_summary[pattern_key] = category_mappings
+            
+            # 🆕 Traitement spécial pour les organisations contextuelles
+            # "NANO by NXO" → "NANO by [ORG_1]"
+            # "client Dupont SA" → "client [ORG_2]"
+            if settings.get('anonymize_organizations', False):
+                # Pattern "by/par/chez + ORG"
+                org_context_pattern = self.pattern_cache.get('org_context')
+                if org_context_pattern:
+                    for match in org_context_pattern.finditer(anonymized_text):
+                        org_name = match.group(1)  # Le groupe capturé (ex: NXO)
+                        if len(org_name) >= 2:  # Éviter les acronymes trop courts
+                            token = self._get_consistent_token('organization', org_name, 'ORG')
+                            anonymized_text = anonymized_text.replace(org_name, token)
+                            total_replacements += 1
+                
+                # Pattern "client/société/entreprise + ORG"
+                org_keyword_pattern = self.pattern_cache.get('org_keyword')
+                if org_keyword_pattern:
+                    for match in org_keyword_pattern.finditer(anonymized_text):
+                        org_name = match.group(1)  # Le groupe capturé
+                        if len(org_name) >= 2:
+                            token = self._get_consistent_token('organization', org_name, 'ORG')
+                            anonymized_text = anonymized_text.replace(org_name, token)
+                            total_replacements += 1
             
             # Anonymisation simple des noms (sans spaCy pour la performance)
             if settings.get('anonymize_names', False):

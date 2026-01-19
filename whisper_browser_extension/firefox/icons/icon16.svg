@@ -1,0 +1,5 @@
+<!-- Icône temporaire 16x16 pour l'extension -->
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <rect width="16" height="16" rx="3" fill="#667eea"/>
+  <text x="8" y="11" text-anchor="middle" fill="white" font-size="10" font-family="Arial">🔒</text>
+</svg>

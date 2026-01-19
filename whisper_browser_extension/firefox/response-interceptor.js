@@ -11,9 +11,9 @@ class ResponseInterceptor {
         this.apiUrl = 'http://localhost:8001';
         this.apiKey = '';
         this.autoDeanonymize = true; // Auto mode by default
-        this.enabled = true; // extension enabled by default
         
-        // Load settings (callers should await this before init)
+        // Load settings
+        this.loadSettings();
     }
 
     /**
@@ -24,55 +24,8 @@ class ResponseInterceptor {
         this.apiUrl = result.apiUrl || 'http://localhost:8001';
         this.apiKey = result.apiKey || '';
         this.autoDeanonymize = result.autoDeanonymize !== false; // true by default
-
-        // Respect global enabled flag if present (try local then sync)
-        const res2 = await chrome.storage.local.get(['enabled']);
-        if (typeof res2.enabled !== 'undefined') {
-            this.enabled = res2.enabled !== false;
-        } else {
-            // fallback to sync storage where popup/background save settings
-            try {
-                const syncRes = await new Promise((resolve) => {
-                    chrome.storage.sync.get(['enabled', 'apiUrl', 'apiKey', 'autoDeanonymize'], resolve);
-                });
-                if (typeof syncRes.enabled !== 'undefined') {
-                    this.enabled = syncRes.enabled !== false;
-                }
-                if (syncRes.apiUrl) this.apiUrl = syncRes.apiUrl;
-                if (syncRes.apiKey) this.apiKey = syncRes.apiKey;
-                if (typeof syncRes.autoDeanonymize !== 'undefined') this.autoDeanonymize = syncRes.autoDeanonymize !== false;
-            } catch (e) {
-                // ignore if sync not available
-            }
-        }
-
-        // Listen for runtime changes to settings (enable/disable)
-        try {
-            chrome.storage.onChanged.addListener((changes, area) => {
-                // Accept changes from both local and sync (popup/background save to sync)
-                if (area !== 'local' && area !== 'sync') return;
-                if (changes.enabled) {
-                    const newVal = changes.enabled.newValue;
-                    if (newVal) {
-                        // Enable: start observing if not already
-                        if (!this.observer) {
-                            const platform = this.detectPlatform();
-                            if (platform) this.startObserving(platform);
-                        }
-                    } else {
-                        // Disable: stop observing and remove injected UI
-                        this.stopObserving();
-                        this.removeInjectedElements();
-                    }
-                    this.enabled = newVal !== false;
-                    console.log(`[ResponseInterceptor] Enabled state changed (area=${area}) -> ${this.enabled}`);
-                }
-            });
-        } catch (err) {
-            console.warn('[ResponseInterceptor] storage.onChanged not available', err);
-        }
-
-        console.log(`[ResponseInterceptor] Settings loaded - Auto: ${this.autoDeanonymize} Enabled: ${this.enabled}`);
+        
+        console.log(`[ResponseInterceptor] Settings loaded - Auto: ${this.autoDeanonymize}`);
     }
 
     /**
@@ -142,33 +95,6 @@ class ResponseInterceptor {
     }
 
     /**
-     * Stop observing DOM changes
-     */
-    stopObserving() {
-        if (this.observer) {
-            try {
-                this.observer.disconnect();
-            } catch (e) {
-                // ignore
-            }
-            this.observer = null;
-        }
-    }
-
-    /**
-     * Remove injected buttons and badges from the page
-     */
-    removeInjectedElements() {
-        // Remove deanonymize buttons
-        const buttons = document.querySelectorAll('.whisper-deanonymize-btn');
-        buttons.forEach(b => b.remove());
-
-        // Remove deanonymized badges
-        const badges = document.querySelectorAll('.whisper-deanonymized-badge');
-        badges.forEach(b => b.remove());
-    }
-
-    /**
      * Process existing content on page
      */
     processExistingContent(platform) {
@@ -199,11 +125,6 @@ class ResponseInterceptor {
      */
     async processNode(node, platform) {
         if (!node || this.processedNodes.has(node)) {
-            return;
-        }
-
-        // Respect global enabled flag
-        if (!this.enabled) {
             return;
         }
 
@@ -426,19 +347,11 @@ class ResponseInterceptor {
 }
 
 // Initialize on content script load
-// Initialize on content script load
-const responseInterceptor = new ResponseInterceptor();
-responseInterceptor.loadSettings().then(() => {
-    if (typeof sessionManager !== 'undefined') {
-        if (responseInterceptor.enabled) {
-            responseInterceptor.init();
-            console.log('[Whisper Network] Response interceptor initialized');
-        } else {
-            console.log('[Whisper Network] Response interceptor disabled by settings');
-        }
-    } else {
-        console.warn('[Whisper Network] SessionManager not loaded, interceptor disabled');
-    }
-}).catch((err) => {
-    console.error('[ResponseInterceptor] Failed to load settings', err);
-});
+if (typeof sessionManager !== 'undefined') {
+    const responseInterceptor = new ResponseInterceptor();
+    responseInterceptor.init();
+    
+    console.log('[Whisper Network] Response interceptor initialized');
+} else {
+    console.warn('[Whisper Network] SessionManager not loaded, interceptor disabled');
+}

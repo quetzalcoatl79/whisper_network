@@ -23,6 +23,22 @@ except ImportError:
     SPACY_AVAILABLE = False
     spacy = None
 
+# CamemBERT NER for advanced French entity detection
+try:
+    from .camembert_ner import get_camembert_ner, is_camembert_available, NEREntityType
+    CAMEMBERT_AVAILABLE = is_camembert_available()
+except ImportError:
+    CAMEMBERT_AVAILABLE = False
+    get_camembert_ner = None
+
+# CamemBERT NER for advanced French entity detection
+try:
+    from .camembert_ner import get_camembert_ner, is_camembert_available, NEREntityType
+    CAMEMBERT_AVAILABLE = is_camembert_available()
+except ImportError:
+    CAMEMBERT_AVAILABLE = False
+    get_camembert_ner = None
+
 try:
     from langdetect import detect, LangDetectException
     LANGDETECT_AVAILABLE = True
@@ -60,6 +76,7 @@ class AnonymizationType(Enum):
     
     # Données sensibles spécifiques
     MEDICAL_DATA = "medical_data"
+    MEDICAL_REFERENCE = "medical_reference"
     DIAGNOSIS = "diagnosis"
     TREATMENT = "treatment"
     DISABILITY = "disability"
@@ -103,9 +120,9 @@ class ConsistencyMapper:
         
         if original_value not in self._mappings[value_type]:
             number = self._counters[value_type]
-            # Extract base token name (remove *** if present)
-            clean_token = base_token.replace("***", "").replace("*", "")
-            self._mappings[value_type][original_value] = f"***{clean_token}_{number}***"
+            # Extract base token name (remove brackets/stars if present)
+            clean_token = base_token.replace("***", "").replace("*", "").replace("[", "").replace("]", "")
+            self._mappings[value_type][original_value] = f"[{clean_token}_{number}]"
             self._counters[value_type] += 1
         
         return self._mappings[value_type][original_value]
@@ -125,8 +142,9 @@ class AnonymizationSettings:
     anonymize_addresses: bool = False
     anonymize_phone: bool = True
     anonymize_email: bool = True
-    anonymize_birth_dates: bool = False
-    anonymize_age: bool = False
+    # NOTE: Age et date de naissance désactivés - sans nom/adresse, pas d'identification possible
+    # anonymize_birth_dates: bool = False
+    # anonymize_age: bool = False
     anonymize_nir: bool = True
     anonymize_id_cards: bool = False
     anonymize_passports: bool = False
@@ -164,38 +182,40 @@ class AnonymizationSettings:
     # === RÉFÉRENCES ===
     anonymize_urls: bool = True
     
-    # === TOKENS DE REMPLACEMENT ===
-    name_token: str = "***NAME***"
-    first_name_token: str = "***PRENOM***"
-    initials_token: str = "***INITIALES***"
-    address_token: str = "***ADDRESS***"
-    phone_token: str = "***PHONE***"
-    email_token: str = "***EMAIL***"
-    birth_date_token: str = "***DATE_NAISSANCE***"
-    age_token: str = "***AGE***"
-    nir_token: str = "***NIR***"
-    id_card_token: str = "***CNI***"
-    passport_token: str = "***PASSEPORT***"
-    ip_token: str = "***IP***"
-    ip_public_token: str = "***IP_PUBLIQUE***"
-    ip_private_token: str = "***IP_PRIVEE***"
-    login_token: str = "***LOGIN***"
-    employee_id_token: str = "***MATRICULE***"
-    performance_token: str = "***EVALUATION***"
-    salary_token: str = "***SALAIRE***"
-    schedule_token: str = "***PLANNING***"
-    internal_comm_token: str = "***COMM_INTERNE***"
-    medical_token: str = "***MEDICAL***"
-    bank_account_token: str = "***COMPTE_BANCAIRE***"
-    transaction_token: str = "***TRANSACTION***"
-    grades_token: str = "***NOTE***"
-    legal_case_token: str = "***DOSSIER_JURIDIQUE***"
-    location_token: str = "***LIEU***"
-    geolocation_token: str = "***COORDONNEES***"
-    biometric_token: str = "***BIOMETRIE***"
-    credit_card_token: str = "***CARTE***"
-    iban_token: str = "***IBAN***"
-    url_token: str = "***URL***"
+    # === TOKENS DE REMPLACEMENT (format [TOKEN] pour meilleure compatibilité IA) ===
+    name_token: str = "[NAME]"
+    first_name_token: str = "[PRENOM]"
+    initials_token: str = "[INITIALES]"
+    address_token: str = "[ADDRESS]"
+    phone_token: str = "[PHONE]"
+    email_token: str = "[EMAIL]"
+    # NOTE: Tokens désactivés - pas d'anonymisation age/date_naissance
+    # birth_date_token: str = "[DATE_NAISSANCE]"
+    # age_token: str = "[AGE]"
+    nir_token: str = "[NIR]"
+    id_card_token: str = "[CNI]"
+    passport_token: str = "[PASSEPORT]"
+    ip_token: str = "[IP]"
+    ip_public_token: str = "[IP_PUBLIQUE]"
+    ip_private_token: str = "[IP_PRIVEE]"
+    login_token: str = "[LOGIN]"
+    employee_id_token: str = "[MATRICULE]"
+    performance_token: str = "[EVALUATION]"
+    salary_token: str = "[SALAIRE]"
+    schedule_token: str = "[PLANNING]"
+    internal_comm_token: str = "[COMM_INTERNE]"
+    medical_token: str = "[MEDICAL]"
+    medical_ref_token: str = "[MEDREF]"
+    bank_account_token: str = "[COMPTE_BANCAIRE]"
+    transaction_token: str = "[TRANSACTION]"
+    grades_token: str = "[NOTE]"
+    legal_case_token: str = "[DOSSIER_JURIDIQUE]"
+    location_token: str = "[LIEU]"
+    geolocation_token: str = "[COORDONNEES]"
+    biometric_token: str = "[BIOMETRIE]"
+    credit_card_token: str = "[CARTE]"
+    iban_token: str = "[IBAN]"
+    url_token: str = "[URL]"
 
 
 @dataclass
@@ -237,6 +257,8 @@ class RegexPatterns:
     PHONE = re.compile(
         r'''(?x)
         (?<!\d)  # Ne pas suivre un chiffre
+        (?!\d{1,2}:\d{2})  # Avoid matching time formats like 09:12
+        (?!\d{4}[-\/]\d{2}[-\/]\d{2})  # Avoid matching dates like 2026-01-10
         (?:
             # Format international avec parenthèses optionnelles pour indicatif zone
             (?:\+|00)\d{1,3}[\s\-\.]*
@@ -253,7 +275,7 @@ class RegexPatterns:
             # Format générique international (minimum 7 chiffres avec séparateurs)
             (?:\d{2,4}[\s\-]\d{2,4}[\s\-]\d{2,4}(?:[\s\-]\d{2,4})*)
         )
-        (?![\.\d])  # Ne pas précéder un point + chiffre (évite les IP)
+        (?![\.\d:])  # Avoid matching trailing digits or times (like :12)
         '''
     )
     
@@ -319,8 +341,9 @@ class RegexPatterns:
     # Dates de naissance (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY)
     BIRTH_DATE = re.compile(r'\b(?:0[1-9]|[12]\d|3[01])[\/\-\.](0[1-9]|1[012])[\/\-\.](?:19|20)\d\d\b')
     
-    # Âge exact (patterns contextuels)
-    AGE = re.compile(r'\b(?:j\'ai|age de|âgé? de|[0-9]{1,2})\s*(?:ans?)\b', re.IGNORECASE | re.UNICODE)
+    # Âge exact (patterns contextuels améliorés pour capturer durées et âges)
+    # Capture le contexte complet: "pendant 5 ans", "depuis 3 ans", "j'ai 25 ans", etc.
+    AGE = re.compile(r'\b(?:pendant|durant|depuis|il y a)?\s*[0-9]{1,2}\s*(?:ans?)\b|\b(?:j\'ai|âgé? de|age de)\s+[0-9]{1,2}\s*(?:ans?)\b', re.IGNORECASE | re.UNICODE)
     
     # Numéros de carte d'identité française
     ID_CARD = re.compile(r'\b[0-9]{12}\b')  # 12 chiffres pour CNI française
@@ -342,6 +365,9 @@ class RegexPatterns:
     
     # Références médicales
     MEDICAL_DATA = re.compile(r'\b(?:diagnostic|pathologie|traitement|médicament|ordonnance|consultation)[\s:].{1,50}\b', re.IGNORECASE | re.UNICODE)
+
+    # Références médicales structurées (ref, réf, dossier, d-num etc.)
+    MEDICAL_REF = re.compile(r'(?i)\b(?:ref(?:erence)?|réf|ref[:#]?|dossier(?:\s*(?:n(?:o|°)?|num(?:ero)?))|d-?num)[\s:#-]*([^\s,;:\)\(]+)', re.IGNORECASE | re.UNICODE)
     
     # Coordonnées GPS
     GEOLOCATION = re.compile(r'\b[-+]?[0-9]{1,3}\.?[0-9]*[°]?\s*[NS]?\s*[,\s]\s*[-+]?[0-9]{1,3}\.?[0-9]*[°]?\s*[EW]?\b')
@@ -374,6 +400,34 @@ class AnonymizationEngine:
         self.nlp_fr = None
         self.nlp_en = None
         self.nlp = None  # Will be set dynamically based on language detection
+        
+        # Initialize CamemBERT NER (preferred for French)
+        self.camembert_ner = None
+        if CAMEMBERT_AVAILABLE:
+            try:
+                self.camembert_ner = get_camembert_ner(confidence_threshold=0.7)
+                if self.camembert_ner.is_available:
+                    logger.info("CamemBERT NER loaded - using advanced French detection")
+                else:
+                    logger.warning("CamemBERT NER not available, falling back to spaCy")
+                    self.camembert_ner = None
+            except Exception as e:
+                logger.warning(f"CamemBERT NER initialization failed: {e}")
+                self.camembert_ner = None
+        
+        # Initialize CamemBERT NER (preferred for French)
+        self.camembert_ner = None
+        if CAMEMBERT_AVAILABLE:
+            try:
+                self.camembert_ner = get_camembert_ner(confidence_threshold=0.7)
+                if self.camembert_ner.is_available:
+                    logger.info("CamemBERT NER loaded - using advanced French detection")
+                else:
+                    logger.warning("CamemBERT NER not available, falling back to spaCy")
+                    self.camembert_ner = None
+            except Exception as e:
+                logger.warning(f"CamemBERT NER initialization failed: {e}")
+                self.camembert_ner = None
         
         if SPACY_AVAILABLE:
             # Load French model
@@ -434,14 +488,61 @@ class AnonymizationEngine:
     
     def _is_likely_person_name(self, text: str) -> bool:
         """Check if text is likely a person name using multiple heuristics."""
-        # Skip common words that aren't names
+        lower_text = text.lower().strip()
+        
+        # Skip greetings and titles of civility
+        greeting_patterns = ['bonjour', 'bonsoir', 'salut', 'cher ', 'chère ', 'hello', 'hi ']
+        if any(lower_text.startswith(g) for g in greeting_patterns):
+            return False
+        
+        # Skip if it contains greeting words
+        if any(g in lower_text for g in ['bonjour', 'bonsoir', 'salut']):
+            return False
+        
+        # Skip common words and expressions that aren't names
         common_words = {
+            # Mots courants
             'bonjour', 'hello', 'salut', 'contact', 'développé', 'serveur', 'client', 'projet',
             'world', 'true', 'false', 'none', 'null', 'informations', 'information',
-            'def', 'class', 'return', 'print', 'import', 'from'  # Python keywords
+            'def', 'class', 'return', 'print', 'import', 'from',  # Python keywords
+            # Titres et métiers (faux positifs fréquents)
+            'data', 'scientist', 'data scientist', 'ingénieur', 'manager', 'directeur', 'madame', 'monsieur',
+            'master', 'licence', 'doctorat', 'université', 'informatique', 'mathématiques',
+            'objet', 'candidature', 'poste', 'titulaire', 'analyse', 'données', 'projets',
+            # Mois et temps
+            'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
+            'septembre', 'octobre', 'novembre', 'décembre', 'lundi', 'mardi', 'mercredi',
+            'jeudi', 'vendredi', 'samedi', 'dimanche',
+            # Expressions courantes
+            'expression', 'salutations', 'distinguées', 'agréer', 'veuillez',
+            # Expressions avec madame/monsieur
+            'bonjour madame', 'bonjour monsieur', 'chère madame', 'cher monsieur'
         }
-        if text.lower() in common_words:
+        if lower_text in common_words:
             return False
+        
+        # Skip if any word in text is a common word (like "Bonjour Madame")
+        words_in_text = lower_text.split()
+        common_single_words = {'bonjour', 'bonsoir', 'salut', 'madame', 'monsieur', 'mademoiselle', 'cher', 'chère'}
+        if any(w in common_single_words for w in words_in_text):
+            return False
+        
+        # Skip company names (end with Corp, Inc, SA, SARL, Ltd, etc.)
+        company_suffixes = ['corp', 'inc', 'sa', 'sarl', 'sas', 'ltd', 'llc', 'gmbh', 'ag', 'bv', 'nv', 'plc']
+        if any(lower_text.endswith(suffix) or lower_text.endswith(suffix + '.') for suffix in company_suffixes):
+            return False
+        
+        # Skip known company/organization names
+        company_keywords = ['tech', 'corp', 'soft', 'sys', 'data', 'info', 'net', 'web', 'cloud', 
+                           'bnp', 'paribas', 'renault', 'peugeot', 'orange', 'total', 'bank']
+        if any(kw in lower_text for kw in company_keywords):
+            return False
+        
+        # Skip multi-word expressions that look like job titles or domains
+        if ' ' in text:
+            job_patterns = ['data ', 'scientist', 'ingénieur', 'manager', 'directeur', 'chef de', 'responsable']
+            if any(pattern in lower_text for pattern in job_patterns):
+                return False
         
         words = text.split()
         if len(words) < 1 or len(words) > 3:  # Names usually have 1-3 words
@@ -553,6 +654,9 @@ class AnonymizationEngine:
             for key, value in custom_settings.items():
                 if hasattr(settings, key):
                     setattr(settings, key, value)
+            # Backward compatibility: accept singular 'anonymize_address' key from older clients
+            if 'anonymize_address' in custom_settings and hasattr(settings, 'anonymize_addresses'):
+                settings.anonymize_addresses = bool(custom_settings.get('anonymize_address'))
         else:
             settings = self.settings
         
@@ -590,11 +694,33 @@ class AnonymizationEngine:
             if settings.anonymize_nir:
                 _, nir_matches = await self._anonymize_nir(text, settings.nir_token)
                 raw_matches.extend(nir_matches)
-            
+
+            # Medical reference identifiers (e.g., ref #MED-4432)
+            if settings.anonymize_medical_data:
+                _, medref_matches = await self._anonymize_medical_references(text, settings.medical_ref_token)
+                raw_matches.extend(medref_matches)
+
             # === THEN ADDRESSES (broader context before specific names) ===
             if settings.anonymize_addresses:
                 _, address_matches = await self._anonymize_addresses(text, settings.address_token)
                 raw_matches.extend(address_matches)
+
+            # NOTE: Age et date de naissance désactivés - sans nom/prénom/adresse, pas d'identification possible
+            # if settings.anonymize_birth_dates:
+            #     _, birth_matches = await self._anonymize_birth_dates(text, settings.birth_date_token)
+            #     raw_matches.extend(birth_matches)
+            #
+            # if settings.anonymize_age:
+            #     _, age_matches = await self._anonymize_age(text, settings.age_token)
+            #     raw_matches.extend(age_matches)
+
+            # === DEDUPE OVERLAPPING MATCHES: prefer longest span ===
+            non_overlapping: List[AnonymizationMatch] = []
+            for m in sorted(raw_matches, key=lambda x: (x.start, -(x.end - x.start))):
+                overlaps = any(max(m.start, existing.start) < min(m.end, existing.end) for existing in non_overlapping)
+                if not overlaps:
+                    non_overlapping.append(m)
+            raw_matches = non_overlapping
             
             # === NAMES LAST (to avoid conflicts with address components and protected patterns) ===
             if settings.anonymize_names:
@@ -615,13 +741,6 @@ class AnonymizationEngine:
             anonymized_text, matches = self._apply_consistent_mapping(raw_matches, text, mapper)
             
             # Continue with other types that don't need consistent mapping for now
-            if settings.anonymize_birth_dates:
-                anonymized_text, birth_matches = await self._anonymize_birth_dates(anonymized_text, settings.birth_date_token)
-                matches.extend(birth_matches)
-            
-            if settings.anonymize_age:
-                anonymized_text, age_matches = await self._anonymize_age(anonymized_text, settings.age_token)
-                matches.extend(age_matches)
             
             if settings.anonymize_id_cards:
                 anonymized_text, id_matches = await self._anonymize_id_cards(anonymized_text, settings.id_card_token)
@@ -853,6 +972,30 @@ class AnonymizationEngine:
                 replacement=token
             ))
             complete_addresses.append((match.start(), match.end()))
+        # Also consider PRECISE_ADDRESS pattern (handles comma-separated formats like "7 Impasse..., 13001 Marseille")
+        for match in self.patterns.PRECISE_ADDRESS.finditer(text):
+            # Avoid duplicating ranges already captured
+            if not any(start <= match.start() < end for start, end in complete_addresses):
+                # If the regex span contains a newline (it may capture following header lines), limit it to the first newline
+                full = match.group()
+                if '\n' in full:
+                    newline_offset = full.index('\n')
+                    new_start = match.start()
+                    new_end = match.start() + newline_offset
+                    original = text[new_start:new_end].strip()
+                else:
+                    new_start = match.start()
+                    new_end = match.end()
+                    original = full.strip()
+
+                matches.append(AnonymizationMatch(
+                    type=AnonymizationType.ADDRESS,
+                    start=new_start,
+                    end=new_end,
+                    original_text=original,
+                    replacement=token
+                ))
+                complete_addresses.append((new_start, new_end))
         
         # Apply complete address anonymization
         for match in sorted([m for m in matches if m.type == AnonymizationType.ADDRESS], 
@@ -941,6 +1084,33 @@ class AnonymizationEngine:
         try:
             doc = self.nlp(text)
             
+            # Préfixes à supprimer des entités PER (salutations, titres généraux)
+            greeting_prefixes = ['bonjour', 'bonsoir', 'salut', 'cher', 'chère', 'hello', 'hi', 'dear']
+            
+            # Mots/expressions à ignorer complètement comme faux positifs PER
+            per_false_positives = {
+                # Titres de civilité seuls
+                'madame', 'monsieur', 'mademoiselle', 'mme', 'm.', 'mr', 'mlle', 'dr', 'dr.',
+                # Titres de poste / métiers (mots individuels aussi)
+                'data', 'scientist', 'data scientist', 'data engineer', 'engineer', 'ingénieur', 
+                'manager', 'directeur', 'directrice', 'chef', 'responsable', 'consultant', 
+                'analyste', 'développeur', 'technicien', 'poste',
+                # Titres académiques
+                'master', 'licence', 'doctorat', 'docteur', 'professeur', 'titulaire',
+                # Disciplines / domaines
+                'informatique', 'mathématiques', 'physique', 'chimie', 'droit', 'économie',
+                # Mots de formule de politesse
+                'expression', 'salutations', 'distinguées', 'agréer',
+                # Pronoms et fragments
+                "j'", "j", "l'", "d'", "n'", "s'", "qu'",
+                # Verbes courants que spaCy peut confondre
+                'candidature', 'obtenu', 'travaillé', 'travaille'
+            }
+            
+            # Suffixes de noms d'entreprise (à ne pas traiter comme des personnes)
+            company_suffixes = ['corp', 'inc', 'sa', 'sarl', 'sas', 'ltd', 'llc', 'gmbh', 'ag', 'bv', 'nv', 'plc']
+            company_keywords = ['tech', 'corp', 'soft', 'sys', 'info', 'net', 'web', 'cloud', 'bank', 'paribas', 'bnp', 'renault', 'peugeot', 'orange', 'total', 'engie', 'sanofi', 'carrefour', 'danone', 'loreal', "l'oreal", 'axa', 'societe generale', 'credit agricole', 'bouygues', 'vinci', 'safran', 'thales', 'dassault', 'michelin', 'schneider', 'alstom', 'capgemini', 'atos']
+            
             # Find different types of entities
             for ent in doc.ents:
                 if ent.label_ == "PER":  # Person entity in French model
@@ -949,20 +1119,89 @@ class AnonymizationEngine:
                     if not entity_text:  # Skip if only whitespace
                         continue
                     
-                    # Adjust end position to exclude trailing whitespace
-                    end_pos = ent.start_char + len(entity_text)
+                    # CLEAN: Supprimer les préfixes de salutation du début
+                    # Track total offset for position calculation
+                    cleaned_text = entity_text
+                    prefix_offset = 0  # Track how many characters we've removed from start
+                    
+                    for prefix in greeting_prefixes:
+                        if cleaned_text.lower().startswith(prefix + ' '):
+                            prefix_offset += len(prefix) + 1  # +1 for the space
+                            cleaned_text = cleaned_text[len(prefix) + 1:].strip()
+                            break
+                    
+                    # Skip if after cleaning nothing meaningful remains
+                    if not cleaned_text or len(cleaned_text) < 2:
+                        continue
+                    
+                    # FILTER: Skip known false positives (job titles, pronouns, etc.)
+                    lower_cleaned = cleaned_text.lower().strip()
+                    if lower_cleaned in per_false_positives:
+                        continue
+                    
+                    # FILTER: Skip if cleaned text STARTS with a false positive word followed by something
+                    # Example: "Madame Dupont" -> we get "Madame" which should be skipped, keep only "Dupont"
+                    first_word = lower_cleaned.split()[0] if lower_cleaned else ''
+                    if first_word in per_false_positives or first_word in greeting_prefixes:
+                        # Skip the first word and check what remains
+                        remaining = ' '.join(lower_cleaned.split()[1:])
+                        if not remaining or len(remaining) < 2:
+                            continue  # Nothing left, skip entirely
+                        # Update cleaned_text to remove the title prefix
+                        words = cleaned_text.split()
+                        first_word_len = len(words[0]) + 1  # +1 for the space
+                        prefix_offset += first_word_len
+                        cleaned_text = ' '.join(words[1:]) if len(words) > 1 else ''
+                        lower_cleaned = cleaned_text.lower().strip()
+                        if not cleaned_text:
+                            continue
+                    
+                    # Skip if it's just a pronoun fragment (j', l', etc.)
+                    if len(cleaned_text) <= 2 or cleaned_text.endswith("'"):
+                        continue
+                    
+                    is_company = (
+                        any(lower_cleaned.endswith(suffix) for suffix in company_suffixes) or
+                        any(kw in lower_cleaned for kw in company_keywords)
+                    )
+                    if is_company:
+                        # Treat as organization, not person
+                        start_pos = ent.start_char + prefix_offset
+                        end_pos = start_pos + len(cleaned_text)
+                        matches.append(AnonymizationMatch(
+                            type=AnonymizationType.INTERNAL_COMMUNICATION,
+                            start=start_pos,
+                            end=end_pos,
+                            original_text=cleaned_text,
+                            replacement="[ORG]"
+                        ))
+                        continue
+                    
+                    # Calculate correct start position using tracked offset
+                    start_pos = ent.start_char + prefix_offset
+                    end_pos = start_pos + len(cleaned_text)
                     
                     matches.append(AnonymizationMatch(
                         type=AnonymizationType.NAME,
-                        start=ent.start_char,
-                        end=end_pos,  # Use adjusted end position
-                        original_text=entity_text,  # Use cleaned text
+                        start=start_pos,
+                        end=end_pos,
+                        original_text=cleaned_text,
                         replacement=token
                     ))
                 elif ent.label_ == "ORG":  # Organization - can contain sensitive internal refs
                     entity_text = ent.text.rstrip()
                     if not entity_text:
                         continue
+                    
+                    # Skip common false positives for ORG (keep only real company names)
+                    org_false_positives = {'université', 'master', 'informatique', 'mathématiques', 'paris', 'lyon', 'france', 'licence', 'doctorat', 'titulaire', 'école', 'analyse', 'données', 'projets'}
+                    if entity_text.lower().strip() in org_false_positives:
+                        continue
+                    
+                    # Skip very short entities or fragments
+                    if len(entity_text) <= 2 or entity_text.endswith("'"):
+                        continue
+                    
                     end_pos = ent.start_char + len(entity_text)
                     
                     matches.append(AnonymizationMatch(
@@ -970,11 +1209,20 @@ class AnonymizationEngine:
                         start=ent.start_char,
                         end=end_pos,
                         original_text=entity_text,
-                        replacement="***ORG***"
+                        replacement="[ORG]"
                     ))
                 elif ent.label_ == "LOC":  # Location - but could be a person name with title
                     entity_text = ent.text.rstrip()
                     if not entity_text:
+                        continue
+                    
+                    # Skip very short entities or pronoun fragments (j', l', etc.)
+                    if len(entity_text) <= 2 or entity_text.endswith("'"):
+                        continue
+                    
+                    # Skip known false positives for LOC (disciplines, domains)
+                    loc_false_positives = {'informatique', 'mathématiques', 'physique', 'chimie', 'droit', 'économie', 'master', 'licence', 'doctorat', 'université'}
+                    if entity_text.lower().strip() in loc_false_positives:
                         continue
                     
                     # Check if it starts with a title (Mr, Mme, Dr, etc.) - likely a person
@@ -1005,14 +1253,18 @@ class AnonymizationEngine:
                                 replacement=token
                             ))
                     else:
-                        # Real location
+                        # Real location - but skip common French cities that are context, not PII
+                        common_cities = {'paris', 'lyon', 'marseille', 'toulouse', 'nice', 'nantes', 'strasbourg', 'montpellier', 'bordeaux', 'lille', 'france'}
+                        if entity_text.lower() in common_cities:
+                            continue  # Skip common city names as they're not PII
+                        
                         end_pos = ent.start_char + len(entity_text)
                         matches.append(AnonymizationMatch(
                             type=AnonymizationType.LOCATION,
                             start=ent.start_char,
                             end=end_pos,
                             original_text=entity_text,
-                            replacement="***LOCATION***"
+                            replacement="[LOCATION]"
                         ))
                 elif ent.label_ == "MISC":  # Miscellaneous - can contain IDs, refs, or names
                     entity_text = ent.text.rstrip()
@@ -1027,7 +1279,7 @@ class AnonymizationEngine:
                             start=ent.start_char,
                             end=end_pos,
                             original_text=entity_text,
-                            replacement="***ID***"
+                            replacement="[ID]"
                         ))
                     # Check if it looks like a person name with better heuristics
                     elif self._is_likely_person_name(entity_text):
@@ -1046,15 +1298,19 @@ class AnonymizationEngine:
             # Apply regex pattern to find additional names
             for regex_match in self.patterns.FRENCH_NAME.finditer(text):
                 start, end = regex_match.start(), regex_match.end()
-                # Only add if not already covered by NLP
+                regex_text = regex_match.group()
+                
+                # Only add if not already covered by NLP AND passes name validation
                 if not any(nlp_start <= start < nlp_end or nlp_start < end <= nlp_end for nlp_start, nlp_end in covered_ranges):
-                    matches.append(AnonymizationMatch(
-                        type=AnonymizationType.NAME,
-                        start=start,
-                        end=end,
-                        original_text=regex_match.group(),
-                        replacement=token
-                    ))
+                    # Apply same filtering as NLP matches
+                    if self._is_likely_person_name(regex_text):
+                        matches.append(AnonymizationMatch(
+                            type=AnonymizationType.NAME,
+                            start=start,
+                            end=end,
+                            original_text=regex_text,
+                            replacement=token
+                        ))
             
             # Replace entities in reverse order to maintain positions
             anonymized_text = text
@@ -1075,15 +1331,25 @@ class AnonymizationEngine:
         """Fallback regex-based name anonymization."""
         matches = []
         for match in self.patterns.FRENCH_NAME.finditer(text):
-            matches.append(AnonymizationMatch(
-                type=AnonymizationType.NAME,
-                start=match.start(),
-                end=match.end(),
-                original_text=match.group(),
-                replacement=token
-            ))
+            match_text = match.group()
+            # Apply same filtering as NLP matches
+            if self._is_likely_person_name(match_text):
+                matches.append(AnonymizationMatch(
+                    type=AnonymizationType.NAME,
+                    start=match.start(),
+                    end=match.end(),
+                    original_text=match_text,
+                    replacement=token
+                ))
         
-        anonymized_text = self.patterns.FRENCH_NAME.sub(token, text)
+        # Replace in reverse order to maintain positions
+        anonymized_text = text
+        for m in sorted(matches, key=lambda x: x.start, reverse=True):
+            anonymized_text = (
+                anonymized_text[:m.start] + 
+                m.replacement + 
+                anonymized_text[m.end:]
+            )
         return anonymized_text, matches
     
     # === NOUVELLES MÉTHODES D'ANONYMISATION ===
@@ -1200,8 +1466,27 @@ class AnonymizationEngine:
         anonymized_text = self.patterns.BANK_ACCOUNT.sub(token, text)
         return anonymized_text, matches
     
+    async def _anonymize_medical_references(self, text: str, token: str) -> Tuple[str, List[AnonymizationMatch]]:
+        """Anonymize structured medical reference identifiers (e.g., ref #MED-4432)."""
+        matches: List[AnonymizationMatch] = []
+        def _repl(m: re.Match) -> str:
+            identifier = m.group(1)
+            # Record exact location of the identifier for mapping
+            matches.append(AnonymizationMatch(
+                type=AnonymizationType.MEDICAL_REFERENCE,
+                start=m.start(1),
+                end=m.end(1),
+                original_text=identifier,
+                replacement=token
+            ))
+            # Replace only the identifier, keep the prefix (ref, dossier, etc.) intact
+            return m.group(0).replace(identifier, token)
+
+        anonymized_text = self.patterns.MEDICAL_REF.sub(_repl, text)
+        return anonymized_text, matches
+
     async def _anonymize_medical_data(self, text: str, token: str) -> Tuple[str, List[AnonymizationMatch]]:
-        """Anonymize medical references."""
+        """Anonymize medical free-text references (diagnostic, traitement...)."""
         matches = []
         for match in self.patterns.MEDICAL_DATA.finditer(text):
             matches.append(AnonymizationMatch(
